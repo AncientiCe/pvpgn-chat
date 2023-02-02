@@ -4,7 +4,7 @@ use std::time::{Instant,Duration};
 
 use std::io::{Read, Write};
 use dotenv::dotenv;
-use std::{env, thread};
+use std::{env, io, thread};
 
 struct Connect<'a> {
     stream: &'a TcpStream,
@@ -158,13 +158,24 @@ fn main() {
             panic!("Omg");
         }
     };
-    let mut stream2 = stream.try_clone().expect("Could not clone stream");
+    let stream2 = stream.try_clone().expect("Could not clone stream");
     let handle = thread::spawn(move || {
         let reader = BufReader::new(&stream2);
         let mut connection = Connect::new(&stream2, 0, "".to_string(), reader);
         connection.connect(&username, &password);
     });
 
+    // To have stdin
+    loop {
+        let mut input = String::new();
+        match io::stdin().read_line(&mut input) {
+            Ok(n) => {
+
+                stream.write_all(format!("{}\r\n", input).as_bytes()).unwrap();
+            }
+            Err(error) => println!("error: {}", error),
+        }
+    }
     handle.join().unwrap();
 }
 
