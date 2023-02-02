@@ -11,4 +11,5 @@ BNET_USER=
 BNET_PASSWORD=
 ```
 ** Observation: `BNET_SERVER` needs to be ip+port
+
 2. `cargo run`
