@@ -17,11 +17,12 @@ impl <'a>Connect<'a> {
     fn new(stream: &'a TcpStream, errno: i32, errstr: String, reader: BufReader<&'a TcpStream>) -> Connect<'a> {
         Connect {stream, errno, errstr, reader}
     }
-    fn waitfor(&mut self, s: &str) {
-        let mut buffer = String::new();
-        while !buffer.contains(s) {
-            buffer.clear();
-            self.reader.read_line(&mut buffer).expect("Failed to read line");
+    fn waitfor(&mut self, wait_s: &str) {
+        let mut buffer = [0; 1024];
+        let mut s: &str = "";
+        while !s.contains(wait_s) {
+            let n = self.stream.read(&mut buffer).unwrap();
+            s = std::str::from_utf8(&buffer[..n]).expect("Found invalid utf-8");
         }
     }
     fn connect(&mut self, username: &str, password: &str) -> i32 {
@@ -33,41 +34,29 @@ impl <'a>Connect<'a> {
         self.stream.write_all(&[3]).unwrap();
 
         println!("Sending username... {}", username);
-        //self.waitfor("Username:");
+        self.waitfor("Username:");
         self.stream.write_all(format!("{}\r\n", username).as_bytes()).unwrap();
 
         println!("Sending password...");
-        //self.waitfor("Password:");
+        self.waitfor("Password:");
         self.stream.write_all(format!("{}\r\n", password).as_bytes()).unwrap();
 
-        let timeout_time = Instant::now() + Duration::from_secs(5);
-
-        // println!("wtf {:?}",timeout_time.elapsed().as_secs());
         let mut buffer = [0; 1024];
-
         loop {
-            // println!("wtf {:?}",timeout_time.elapsed().as_secs());
-            let mut buffer = [0; 1024];
-
-            // println!("wtf {:?}",timeout_time.elapsed().as_secs());
-
             let n = self.stream.read(&mut buffer).unwrap();
             let s = std::str::from_utf8(&buffer[..n]).expect("Found invalid utf-8");
             println!("Read {} bytes: {:?}", n, s);
-            if timeout_time.elapsed().as_secs() > 0 {
-               break;
-            }
         }
 
-        if buffer.contains(&2010) {
-            println!("Bot logged in");
-            return 0;
-        } else {
-            println!("Error with bot login");
-            println!("{:?}", buffer);
-            self.stream.shutdown(std::net::Shutdown::Both);
-            return -1;
-        }
+        // if buffer.contains(&2010) {
+        //     println!("Bot logged in");
+        //     return 0;
+        // } else {
+        //     println!("Error with bot login");
+        //     println!("{:?}", buffer);
+        //     self.stream.shutdown(std::net::Shutdown::Both);
+        //     return -1;
+        // }
     }
 }
 
