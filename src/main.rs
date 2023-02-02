@@ -4,7 +4,7 @@ use std::time::{Instant,Duration};
 
 use std::io::{Read, Write};
 use dotenv::dotenv;
-use std::env;
+use std::{env, thread};
 
 struct Connect<'a> {
     stream: &'a TcpStream,
@@ -145,7 +145,7 @@ fn main() {
     let password = env::var("BNET_PASSWORD").unwrap();
 
     let timeout = 2;
-    println!("Connecting bot... {}", host);
+    println!("Connecting chat... {}", host);
     let timeout_initial = timeout as u64;
     let timeout = std::time::Duration::from_secs(timeout_initial);
     let host: SocketAddr = host
@@ -158,14 +158,13 @@ fn main() {
             panic!("Omg");
         }
     };
-    let reader = BufReader::new(&stream);
-    let mut connection = Connect::new(&stream, 0, "".to_string(), reader);
-    match connection.connect( &username, &password) {
-        0 => println!("Connected successfully"),
-        -1 => println!("Error: empty username or password"),
-        -2 => println!("Error: socket error"),
-        -3 => println!("Error: socket already opened"),
-        _ => println!("Unknown error"),
-    }
+    let mut stream2 = stream.try_clone().expect("Could not clone stream");
+    let handle = thread::spawn(move || {
+        let reader = BufReader::new(&stream2);
+        let mut connection = Connect::new(&stream2, 0, "".to_string(), reader);
+        connection.connect(&username, &password);
+    });
+
+    handle.join().unwrap();
 }
 
