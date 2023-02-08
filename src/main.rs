@@ -72,6 +72,7 @@ impl Main {
             ("1002", "JOIN"),
             ("1003", "LEAVE"),
             ("1004", "WHISPER"),
+            ("1010", "WHISPER_TO"),
         ];
 
         let message_codes_map: HashMap<String, String> = HashMap::from_iter(message_codes.iter().map(|(k,v)| (k.to_string(), v.to_string())));
@@ -105,6 +106,8 @@ impl Main {
                 let button = egui::Button::new("Submit");
                 if ui.add(button).clicked() {
                     self.send(self.message.clone());
+                    self.messages.push(format!("You: {}", self.message));
+                    self.message = "".to_string();
                 }
             });
         });
@@ -118,7 +121,6 @@ impl Main {
     }
 
     pub fn send(&mut self, msg: String) {
-        println!("Sending: {}", msg);
         self.stream.send(msg);
     }
 
@@ -153,6 +155,11 @@ impl Main {
                 let _ = parts.next(); // Skip the "to" part
                 self.messages.push(format!("{} whispers: {}", from, parts.collect::<Vec<_>>().join(" ")));
             }
+            "WHISPER_TO" => {
+                let from = parts.next().unwrap();
+                let _ = parts.next(); // Skip the "to" part
+                self.messages.push(format!("You whisper {}: {}", from, parts.collect::<Vec<_>>().join(" ")));
+            }
             "TALK" => {
                 let from = parts.next().unwrap();
                 self.messages.push(format!("{}: {}", from, parts.collect::<Vec<_>>().join(" ")));
@@ -173,7 +180,7 @@ fn read(mut stream: TcpStream, req_tx: Sender<String>) {
     loop {
         let n = stream.read(&mut buffer).unwrap();
         let s = std::str::from_utf8(&buffer[..n]).expect("Found invalid utf-8");
-        // println!("Read {} bytes: {:?}", n, s);
+        println!("Read {} bytes: {:?}", n, s);
         let lines = s.split("\r\n");
         for line in lines {
             if line.is_empty() {
