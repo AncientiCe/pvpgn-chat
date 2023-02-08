@@ -4,12 +4,15 @@ This is a test project in Rust programming language to connect to a pvpgn server
 
 ## To test
 
-1. Create a `.env` file with the following contents and the values for each variable
-```agsl
-BNET_SERVER=
-BNET_USER=
-BNET_PASSWORD=
-```
-** Observation: `BNET_SERVER` needs to be ip+port
+** Observation: `Server` needs to be ip+port
 
 2. `cargo run`
+
+## Not yet there
+* Submit on enter on message input
+* Styles
+* Icons
+* Code beautify
+* Right click on user
+* Message styles in main panel
+* ...
