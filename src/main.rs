@@ -3,15 +3,15 @@
 mod login;
 mod connect;
 
+use std::collections::{HashMap, HashSet};
 use std::io::{BufReader, Read, Write};
 use std::net::{SocketAddr, TcpStream};
-use std::sync::mpsc::{channel, Receiver};
+use std::sync::mpsc::{channel, Receiver, Sender};
 
-use std::thread;
 use crate::connect::Connect;
 
 use eframe::egui;
-use serde::de::Unexpected::Str;
+use serde::{Deserialize, Serialize};
 use crate::Connected::Done;
 
 fn main() {
@@ -50,30 +50,49 @@ struct MyApp {
 pub struct Main {
     message: String,
     messages: Vec<String>,
-    connection: Connect,
+    stream: Connect,
+    users: HashSet<String>,
     response: Receiver<String>,
+    message_codes: HashMap<String, String>,
 }
 
 impl Main {
-    fn new(p0: Connect, req_rx: Receiver<String>) -> Self {
+    fn new(stream: Connect, req_rx: Receiver<String>) -> Self {
+        // These are fucked up
+        let message_codes = [
+            ("1001", "USER"),
+            ("1007", "CHANNEL"),
+            ("1009", "USER"),
+            ("1018", "INFO"),
+            ("1019", "ERROR"),
+            ("1020", "STATS"),
+            ("1021", "INGAME"),
+            ("1022", "LOGGED_IN"),
+            ("1023", "LOGGED_OUT"),
+            ("1002", "JOIN"),
+            ("1003", "LEAVE"),
+            ("1004", "WHISPER"),
+        ];
+
+        let message_codes_map: HashMap<String, String> = HashMap::from_iter(message_codes.iter().map(|(k,v)| (k.to_string(), v.to_string())));
         Self {
             message: "".to_string(),
             messages: vec![],
-            connection: p0,
+            stream,
+            users: HashSet::new(),
             response: req_rx,
+            message_codes: message_codes_map,
         }
 
     }
 
     fn update(&mut self, ctx: &egui::Context) {
         if let Ok(response) = self.response.try_recv() {
-            println!("Received on channel: {}", response);
-            self.messages.push(response);
-            true;
+            self.parse_message(response);
         }
         egui::SidePanel::right("sidebar_users").show(ctx, |ui| {
             egui::ScrollArea::vertical().show(ui, |ui| {
-                for x in self.connection.users.clone() {
+                for x in self.users.clone() {
                     ui.horizontal(|ui| {
                         ui.label(x);
                     });
@@ -84,7 +103,9 @@ impl Main {
             ui.horizontal(|ui| {
                 ui.text_edit_singleline(&mut self.message);
                 let button = egui::Button::new("Submit");
-                if ui.add(button).clicked() { self.connection.send(self.message.clone()) }
+                if ui.add(button).clicked() {
+                    self.send(self.message.clone());
+                }
             });
         });
         egui::CentralPanel::default().show(ctx, |ui| {
@@ -95,12 +116,81 @@ impl Main {
             }
         });
     }
+
+    pub fn send(&mut self, msg: String) {
+        println!("Sending: {}", msg);
+        self.stream.send(msg);
+    }
+
+    fn parse_message(&mut self, line: String) {
+        let mut parts = line.split(" ");
+        let code = parts.next().unwrap();
+        let x1 = &"UNKNOWN".to_string();
+        let message_type = match self.message_codes.get(code) {
+            Some(x) => x,
+            _ => x1
+        };
+
+        // skip text type as we validate on code
+        parts.next().unwrap();
+        match message_type.as_ref() {
+            "USER" => {
+                let user = parts.next().unwrap();
+                self.users.insert(user.to_string().to_owned());
+            }
+            "JOIN" => {
+                let user = parts.next().unwrap();
+                self.users.insert(user.to_string().to_owned());
+                self.messages.push(format!("{} has joined the channel", user));
+            },
+            "LEAVE" => {
+                let user = parts.next().unwrap();
+                self.users.remove(user);
+                self.messages.push(format!("{} has left the channel", user));
+            },
+            "WHISPER" => {
+                let from = parts.next().unwrap();
+                let _ = parts.next(); // Skip the "to" part
+                self.messages.push(format!("{} whispers: {}", from, parts.collect::<Vec<_>>().join(" ")));
+            }
+            "TALK" => {
+                let from = parts.next().unwrap();
+                self.messages.push(format!("{}: {}", from, parts.collect::<Vec<_>>().join(" ")));
+            }
+            "BROADCAST" => {
+                self.messages.push(format!("Broadcast: {}", parts.collect::<Vec<_>>().join(" ")));
+            }
+            "ERROR" | "UNKNOWN" | "INFO" => {
+                self.messages.push(format!("{}: {}", message_type, parts.collect::<Vec<_>>().join(" ")));
+            },
+            _ => {}
+        }
+    }
 }
+
+fn read(mut stream: TcpStream, req_tx: Sender<String>) {
+    let mut buffer = [0; 1024];
+    loop {
+        let n = stream.read(&mut buffer).unwrap();
+        let s = std::str::from_utf8(&buffer[..n]).expect("Found invalid utf-8");
+        // println!("Read {} bytes: {:?}", n, s);
+        let lines = s.split("\r\n");
+        for line in lines {
+            if line.is_empty() {
+                continue;
+            }
+            println!("{}", line.to_string());
+            req_tx.send(line.to_string());
+        }
+    }
+}
+
 enum Connected {
     Done(Credentials),
     None,
 }
 
+#[derive(Serialize, Deserialize)]
 struct Credentials {
     server: String,
     user: String,
@@ -136,6 +226,11 @@ impl eframe::App for MyApp {
 
 impl View {
     fn make_main(&mut self, cred: Credentials) -> &mut Main {
+        std::fs::write(
+            "credentials.json",
+            serde_json::to_string_pretty(&cred).unwrap(),
+        )
+            .unwrap();
         let host: SocketAddr = cred.server
             .parse()
             .expect("Unable to parse socket address");
@@ -143,24 +238,21 @@ impl View {
         println!("Connecting chat... {}", host);
         let timeout_initial = timeout as u64;
         let timeout = std::time::Duration::from_secs(timeout_initial);
-        let mut stream = match TcpStream::connect_timeout(&host, timeout) {
+        let stream = match TcpStream::connect_timeout(&host, timeout) {
             Ok(s) => s,
             Err(_) => {
                 println!("Socket error");
                 panic!("Omg");
             }
         };
-        let stream2 = stream.try_clone().unwrap();
-        let reader = BufReader::new(stream2);
+        let stream3 = stream.try_clone().unwrap();
         let mut connection = Connect::new(
-            stream,
-            reader
+            stream3
         );
         connection.connect(&cred.user, &cred.password);
         let (req_tx, req_rx) = channel();
-        let mut connection2 = connection.clone();
         let handle = std::thread::spawn(move || {
-            connection2.read(req_tx);
+            read(stream, req_tx);
         });
 
         let view = Main::new(connection, req_rx);

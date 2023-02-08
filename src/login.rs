@@ -1,5 +1,6 @@
 use eframe::egui::{self, Color32, TextEdit};
 use serde::{Deserialize, Serialize};
+use crate::Credentials;
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(default)]
@@ -13,6 +14,16 @@ pub struct Login {
 
 impl Login {
     pub fn update(&mut self, ctx: &egui::Context) -> bool {
+        let credentials = {
+            // Load the first file into a string.
+            let text = std::fs::read_to_string(&"credentials.json").unwrap();
+
+            // Parse the string into a dynamically-typed JSON structure.
+            serde_json::from_str::<Credentials>(&text).unwrap()
+        };
+        self.user = credentials.user;
+        self.server = credentials.server;
+        self.password = credentials.password;
         let mut update = false;
         egui::CentralPanel::default().show(ctx, |ui| {
 
@@ -31,6 +42,7 @@ impl Login {
                         ui.label("Server ip and port:");
                         ui.add(
                             TextEdit::singleline(&mut self.server)
+
                                 .hint_text("116.203.95.137:6112 - For eurobattle.net"),
                         );
                         ui.label("Username:");
