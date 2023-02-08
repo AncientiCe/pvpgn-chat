@@ -44,8 +44,7 @@ impl Connect {
 
     pub fn send(&mut self, msg: String) {
         println!("Sending: {}", msg);
-        self.writer.write(msg.as_bytes()).unwrap();
-        self.writer.flush().unwrap();
+        self.stream.write_all(format!("{}\r\n", msg).as_bytes()).unwrap();
     }
 }
 
