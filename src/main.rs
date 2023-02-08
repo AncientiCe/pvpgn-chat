@@ -1,22 +1,63 @@
-use std::io::{BufRead, BufReader};
-use std::net::{TcpStream, SocketAddr};
-use std::time::{Instant,Duration};
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
-use std::io::{Read, Write};
-use dotenv::dotenv;
-use std::{env, io, thread};
+mod login;
+mod connect;
 
-struct Connect<'a> {
-    stream: &'a TcpStream,
-    errno: i32,
-    errstr: String,
-    reader: BufReader<&'a TcpStream>,
-    message_codes_map: HashMap<&'a str, &'a str>,
-    users: HashSet<String>
+use std::collections::{HashMap, HashSet};
+use std::io::{BufReader, Read, Write};
+use std::net::{SocketAddr, TcpStream};
+use std::sync::mpsc::{channel, Receiver, Sender};
+
+use crate::connect::Connect;
+
+use eframe::egui;
+use serde::{Deserialize, Serialize};
+use crate::Connected::Done;
+
+fn main() {
+    // Log to stdout (if you run with `RUST_LOG=debug`).
+    tracing_subscriber::fmt::init();
+
+    let options = eframe::NativeOptions {
+        initial_window_size: Some(egui::vec2(320.0, 240.0)),
+        ..Default::default()
+    };
+    eframe::run_native(
+        "My chat app",
+        options,
+        Box::new(|_cc| Box::new(MyApp::default())),
+    );
 }
 
-impl <'a>Connect<'a> {
-    fn new(stream: &'a TcpStream, errno: i32, errstr: String, reader: BufReader<&'a TcpStream>) -> Connect<'a> {
+/// Which view is currectly open
+#[derive(Debug)]
+pub enum View {
+    Login(login::Login),
+    Main(Main)
+}
+impl Default for View {
+    fn default() -> Self {
+        View::Login(login::Login::default())
+    }
+}
+
+#[derive(Debug, Default)]
+struct MyApp {
+    view: View,
+}
+
+#[derive(Debug)]
+pub struct Main {
+    message: String,
+    messages: Vec<String>,
+    stream: Connect,
+    users: HashSet<String>,
+    response: Receiver<String>,
+    message_codes: HashMap<String, String>,
+}
+
+impl Main {
+    fn new(stream: Connect, req_rx: Receiver<String>) -> Self {
         // These are fucked up
         let message_codes = [
             ("1001", "USER"),
@@ -31,151 +72,203 @@ impl <'a>Connect<'a> {
             ("1002", "JOIN"),
             ("1003", "LEAVE"),
             ("1004", "WHISPER"),
-            ("1027", "TALK"),
-            ("1028", "BROADCAST"),
-            ("1029", "CHANNEL_FULL"),
-            ("1030", "CHANNEL_DOES_NOT_EXIST"),
-            ("1031", "CHANNEL_RESTRICTED"),
-            ("1032", "INFO_DIALOG"),
-            ("1033", "ERROR_DIALOG"),
-            ("1034", "AVAILABLE_USERS"),
-            ("1035", "WHISPER_FAILED"),
-            ("1036", "WHISPER_SENT"),
-            ("1037", "FILE_RECV"),
-            ("1038", "FILE_SEND"),
-            ("1039", "FILE_RECV_SEND_FAILED"),
-            ("1040", "FILE_RECV_SEND_DENIED"),
-            ("1041", "FILE_RESUMING"),
-            ("1042", "FILE_CANCELLED"),
-            ("1043", "FILE_ABORTED"),
-            ("1044", "FILE_FINISHED"),
+            ("1010", "WHISPER_TO"),
         ];
 
-        let message_codes_map: HashMap<&str, &str> = message_codes.iter().cloned().collect();
-        let users = HashSet::new();
-        Connect {stream, errno, errstr, reader, message_codes_map, users}
-    }
-    fn waitfor(&mut self, wait_s: &str) {
-        let mut buffer = [0; 1024];
-        let mut s: &str = "";
-        while !s.contains(wait_s) {
-            let n = self.stream.read(&mut buffer).unwrap();
-            s = std::str::from_utf8(&buffer[..n]).expect("Found invalid utf-8");
-        }
-    }
-    fn connect(&mut self, username: &str, password: &str) -> i32 {
-        if username.is_empty() || password.is_empty() {
-            return -1;
+        let message_codes_map: HashMap<String, String> = HashMap::from_iter(message_codes.iter().map(|(k,v)| (k.to_string(), v.to_string())));
+        Self {
+            message: "".to_string(),
+            messages: vec![],
+            stream,
+            users: HashSet::new(),
+            response: req_rx,
+            message_codes: message_codes_map,
         }
 
+    }
 
-        self.stream.write_all(&[3]).unwrap();
+    fn update(&mut self, ctx: &egui::Context) {
+        if let Ok(response) = self.response.try_recv() {
+            self.parse_message(response);
+        }
+        egui::SidePanel::right("sidebar_users").show(ctx, |ui| {
+            egui::ScrollArea::vertical().show(ui, |ui| {
+                for x in self.users.clone() {
+                    ui.horizontal(|ui| {
+                        ui.label(x);
+                    });
+                }
+            });
+        });
+        egui::TopBottomPanel::bottom("actions").show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                ui.text_edit_singleline(&mut self.message);
+                let button = egui::Button::new("Submit");
+                if ui.add(button).clicked() {
+                    self.send(self.message.clone());
+                    self.messages.push(format!("You: {}", self.message));
+                    self.message = "".to_string();
+                }
+            });
+        });
+        egui::CentralPanel::default().show(ctx, |ui| {
+            for x in self.messages.clone() {
+                ui.horizontal(|ui| {
+                    ui.label(x);
+                });
+            }
+        });
+    }
 
-        println!("Sending username... {}", username);
-        self.waitfor("Username:");
-        self.stream.write_all(format!("{}\r\n", username).as_bytes()).unwrap();
+    pub fn send(&mut self, msg: String) {
+        self.stream.send(msg);
+    }
 
-        println!("Sending password...");
-        self.waitfor("Password:");
-        self.stream.write_all(format!("{}\r\n", password).as_bytes()).unwrap();
+    fn parse_message(&mut self, line: String) {
+        let mut parts = line.split(" ");
+        let code = parts.next().unwrap();
+        let x1 = &"UNKNOWN".to_string();
+        let message_type = match self.message_codes.get(code) {
+            Some(x) => x,
+            _ => x1
+        };
 
-        let mut buffer = [0; 1024];
-        loop {
-            let n = self.stream.read(&mut buffer).unwrap();
-            let s = std::str::from_utf8(&buffer[..n]).expect("Found invalid utf-8");
-            println!("Read {} bytes: {:?}", n, s);
-            self.stream.write_all(format!("{}\r\n", "/join w3").as_bytes()).unwrap();
-            self.parse_message(s);
+        // skip text type as we validate on code
+        parts.next().unwrap();
+        match message_type.as_ref() {
+            "USER" => {
+                let user = parts.next().unwrap();
+                self.users.insert(user.to_string().to_owned());
+            }
+            "JOIN" => {
+                let user = parts.next().unwrap();
+                self.users.insert(user.to_string().to_owned());
+                self.messages.push(format!("{} has joined the channel", user));
+            },
+            "LEAVE" => {
+                let user = parts.next().unwrap();
+                self.users.remove(user);
+                self.messages.push(format!("{} has left the channel", user));
+            },
+            "WHISPER" => {
+                let from = parts.next().unwrap();
+                let _ = parts.next(); // Skip the "to" part
+                self.messages.push(format!("{} whispers: {}", from, parts.collect::<Vec<_>>().join(" ")));
+            }
+            "WHISPER_TO" => {
+                let from = parts.next().unwrap();
+                let _ = parts.next(); // Skip the "to" part
+                self.messages.push(format!("You whisper {}: {}", from, parts.collect::<Vec<_>>().join(" ")));
+            }
+            "TALK" => {
+                let from = parts.next().unwrap();
+                self.messages.push(format!("{}: {}", from, parts.collect::<Vec<_>>().join(" ")));
+            }
+            "BROADCAST" => {
+                self.messages.push(format!("Broadcast: {}", parts.collect::<Vec<_>>().join(" ")));
+            }
+            "ERROR" | "UNKNOWN" | "INFO" => {
+                self.messages.push(format!("{}: {}", message_type, parts.collect::<Vec<_>>().join(" ")));
+            },
+            _ => {}
         }
     }
-    fn parse_message(&mut self, message: &str) {
+}
 
-
-        let lines = message.split("\r\n");
-
+fn read(mut stream: TcpStream, req_tx: Sender<String>) {
+    let mut buffer = [0; 1024];
+    loop {
+        let n = stream.read(&mut buffer).unwrap();
+        let s = std::str::from_utf8(&buffer[..n]).expect("Found invalid utf-8");
+        println!("Read {} bytes: {:?}", n, s);
+        let lines = s.split("\r\n");
         for line in lines {
             if line.is_empty() {
                 continue;
             }
-
-            let mut parts = line.split(" ");
-            let code = parts.next().unwrap();
-            let message_type = self.message_codes_map.get(code).unwrap_or(&"UNKNOWN");
-
-            // skip text type as we validate on code
-            parts.next().unwrap();
-            match message_type.as_ref() {
-                "USER" => {
-                    let user = parts.next().unwrap();
-                    self.users.insert(user.to_string().to_owned());
-                }
-                "JOIN" => {
-                    let user = parts.next().unwrap();
-                    self.users.insert(user.to_string().to_owned());
-                    println!("{} has joined the channel", user)
-                },
-                "LEAVE" => {
-                    let user = parts.next().unwrap();
-                    self.users.remove(user);
-                    println!("{} has left the channel", user)
-                },
-                "WHISPER" => {
-                    let from = parts.next().unwrap();
-                    let _ = parts.next(); // Skip the "to" part
-                    println!("{} whispers: {}", from, parts.collect::<Vec<_>>().join(" "))
-                }
-                "TALK" => {
-                    let from = parts.next().unwrap();
-                    println!("{}: {}", from, parts.collect::<Vec<_>>().join(" "))
-                }
-                "BROADCAST" => println!("Broadcast: {}", parts.collect::<Vec<_>>().join(" ")),
-                "ERROR" | "UNKNOWN" | "INFO" => println!("{}: {}", message_type, parts.collect::<Vec<_>>().join(" ")),
-                _ => {}
-            }
+            println!("{}", line.to_string());
+            req_tx.send(line.to_string());
         }
     }
 }
 
-use std::collections::{HashMap, HashSet};
-
-fn main() {
-    dotenv().ok();
-    let host = env::var("BNET_SERVER").unwrap();
-    let username = env::var("BNET_USER").unwrap();
-    let password = env::var("BNET_PASSWORD").unwrap();
-
-    let timeout = 2;
-    println!("Connecting chat... {}", host);
-    let timeout_initial = timeout as u64;
-    let timeout = std::time::Duration::from_secs(timeout_initial);
-    let host: SocketAddr = host
-        .parse()
-        .expect("Unable to parse socket address");
-    let mut stream = match TcpStream::connect_timeout(&host, timeout) {
-        Ok(s) => s,
-        Err(_) => {
-            println!("Socket error");
-            panic!("Omg");
-        }
-    };
-    let stream2 = stream.try_clone().expect("Could not clone stream");
-    let handle = thread::spawn(move || {
-        let reader = BufReader::new(&stream2);
-        let mut connection = Connect::new(&stream2, 0, "".to_string(), reader);
-        connection.connect(&username, &password);
-    });
-
-    // To have stdin
-    loop {
-        let mut input = String::new();
-        match io::stdin().read_line(&mut input) {
-            Ok(n) => {
-
-                stream.write_all(format!("{}\r\n", input).as_bytes()).unwrap();
-            }
-            Err(error) => println!("error: {}", error),
-        }
-    }
-    handle.join().unwrap();
+enum Connected {
+    Done(Credentials),
+    None,
 }
 
+#[derive(Serialize, Deserialize)]
+struct Credentials {
+    server: String,
+    user: String,
+    password: String,
+}
+
+impl eframe::App for MyApp {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        let credentials = match self.view {
+            View::Login(ref mut login) => {
+                if login.update(ctx)
+                {
+                    let connected = Done(Credentials {
+                        server: login.server.to_string(),
+                        user: login.user.to_string(),
+                        password: login.password.to_string()
+                    });
+                    connected
+                } else {
+                    Connected::None
+                }
+            }
+            View::Main(ref mut view) => {
+                view.update(ctx);
+                Connected::None
+            }
+        };
+        if let Done(cred) = credentials {
+            self.view.make_main(cred);
+        }
+    }
+}
+
+impl View {
+    fn make_main(&mut self, cred: Credentials) -> &mut Main {
+        std::fs::write(
+            "credentials.json",
+            serde_json::to_string_pretty(&cred).unwrap(),
+        )
+            .unwrap();
+        let host: SocketAddr = cred.server
+            .parse()
+            .expect("Unable to parse socket address");
+        let timeout = 2;
+        println!("Connecting chat... {}", host);
+        let timeout_initial = timeout as u64;
+        let timeout = std::time::Duration::from_secs(timeout_initial);
+        let stream = match TcpStream::connect_timeout(&host, timeout) {
+            Ok(s) => s,
+            Err(_) => {
+                println!("Socket error");
+                panic!("Omg");
+            }
+        };
+        let stream3 = stream.try_clone().unwrap();
+        let mut connection = Connect::new(
+            stream3
+        );
+        connection.connect(&cred.user, &cred.password);
+        let (req_tx, req_rx) = channel();
+        let handle = std::thread::spawn(move || {
+            read(stream, req_tx);
+        });
+
+        let view = Main::new(connection, req_rx);
+        *self = View::Main(view);
+        match *self {
+            View::Main(ref mut main) => {
+                main
+            },
+            _ => unreachable!(),
+        }
+    }
+}
