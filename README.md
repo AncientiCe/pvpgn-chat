@@ -2,6 +2,8 @@
 
 This is a test project in Rust programming language to connect to a pvpgn server and receive packages.
 
+![](demo.gif)
+
 ## To test
 
 ** Observation: `Server` needs to be ip+port

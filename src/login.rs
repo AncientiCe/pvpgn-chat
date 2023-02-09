@@ -37,7 +37,7 @@ impl Login {
                     if let Some(ref error) = self.error {
                         ui.colored_label(Color32::from_rgb(255, 0, 0), error);
                     }
-                    ui.vertical(|ui| {
+                    ui.vertical_centered(|ui| {
                         ui.heading("Log in");
                         ui.label("Server ip and port:");
                         ui.add(

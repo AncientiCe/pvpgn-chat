@@ -19,11 +19,11 @@ fn main() {
     tracing_subscriber::fmt::init();
 
     let options = eframe::NativeOptions {
-        initial_window_size: Some(egui::vec2(320.0, 240.0)),
+        // initial_window_size: Some(egui::vec2(320.0, 240.0)),
         ..Default::default()
     };
     eframe::run_native(
-        "My chat app",
+        "Bnet chat",
         options,
         Box::new(|_cc| Box::new(MyApp::default())),
     );
@@ -102,12 +102,13 @@ impl Main {
         });
         egui::TopBottomPanel::bottom("actions").show(ctx, |ui| {
             ui.horizontal(|ui| {
-                ui.text_edit_singleline(&mut self.message);
+                let input = ui.text_edit_singleline(&mut self.message);
+                if input.lost_focus() && input.ctx.input().key_pressed(egui::Key::Enter) {
+                    self.send_input();
+                }
                 let button = egui::Button::new("Submit");
                 if ui.add(button).clicked() {
-                    self.send(self.message.clone());
-                    self.messages.push(format!("You: {}", self.message));
-                    self.message = "".to_string();
+                    self.send_input();
                 }
             });
         });
@@ -118,6 +119,12 @@ impl Main {
                 });
             }
         });
+    }
+
+    fn send_input(&mut self) {
+        self.send(self.message.clone());
+        self.messages.push(format!("You: {}", self.message));
+        self.message.clear();
     }
 
     pub fn send(&mut self, msg: String) {
