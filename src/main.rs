@@ -4,7 +4,7 @@ mod login;
 mod connect;
 
 use std::collections::{HashMap, HashSet};
-use std::io::{BufReader, Read, Write};
+use std::io::Read;
 use std::net::{SocketAddr, TcpStream};
 use std::sync::mpsc::{channel, Receiver, Sender};
 
@@ -194,7 +194,7 @@ fn read(mut stream: TcpStream, req_tx: Sender<String>) {
                 continue;
             }
             println!("{}", line.to_string());
-            req_tx.send(line.to_string());
+            let _ = req_tx.send(line.to_string());
         }
     }
 }
@@ -204,7 +204,7 @@ enum Connected {
     None,
 }
 
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Serialize, Deserialize, Default, Debug)]
 struct Credentials {
     server: String,
     user: String,
@@ -265,7 +265,7 @@ impl View {
         );
         connection.connect(&cred.user, &cred.password);
         let (req_tx, req_rx) = channel();
-        let handle = std::thread::spawn(move || {
+        std::thread::spawn(move || {
             read(stream, req_tx);
         });
 

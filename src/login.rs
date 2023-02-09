@@ -2,7 +2,7 @@ use eframe::egui::{self, Color32, TextEdit};
 use serde::{Deserialize, Serialize};
 use crate::Credentials;
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Login {
     pub server: String,
@@ -12,18 +12,30 @@ pub struct Login {
     pub error: Option<String>,
 }
 
+impl Default for Login {
+    fn default() -> Self {
+        let mut login = Login {
+            server: "".to_string(),
+            user: "".to_string(),
+            password: "".to_string(),
+            error: None,
+        };
+        if let Ok(text) = std::fs::read_to_string(&"credentials.json") {
+
+                // Parse the string into a dynamically-typed JSON structure.
+            let credentials = serde_json::from_str::<Credentials>(&text).unwrap();
+            login.user.push_str(&credentials.user);
+            login.server.push_str(&credentials.server);
+            login.password.push_str(&credentials.password);
+        };
+
+        login
+    }
+}
+
 impl Login {
     pub fn update(&mut self, ctx: &egui::Context) -> bool {
-        let credentials = match std::fs::read_to_string(&"credentials.json") {
-            Ok(text) => {
-                // Parse the string into a dynamically-typed JSON structure.
-                serde_json::from_str::<Credentials>(&text).unwrap()
-            }
-            _ => Credentials::default()
-        };
-        self.user = credentials.user;
-        self.server = credentials.server;
-        self.password = credentials.password;
+
         let mut update = false;
         egui::CentralPanel::default().show(ctx, |ui| {
 
@@ -40,11 +52,8 @@ impl Login {
                     ui.vertical_centered(|ui| {
                         ui.heading("Log in");
                         ui.label("Server ip and port:");
-                        ui.add(
-                            TextEdit::singleline(&mut self.server)
+                        ui.text_edit_singleline(&mut self.server);
 
-                                .hint_text("116.203.95.137:6112 - For eurobattle.net"),
-                        );
                         ui.label("Username:");
                         ui.add(TextEdit::singleline(&mut self.user).hint_text("alice"));
                         ui.label("Password:");
