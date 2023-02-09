@@ -187,13 +187,13 @@ fn read(mut stream: TcpStream, req_tx: Sender<String>) {
     loop {
         let n = stream.read(&mut buffer).unwrap();
         let s = std::str::from_utf8(&buffer[..n]).expect("Found invalid utf-8");
-        println!("Read {} bytes: {:?}", n, s);
+        // println!("Read {} bytes: {:?}", n, s);
         let lines = s.split("\r\n");
         for line in lines {
             if line.is_empty() {
                 continue;
             }
-            println!("{}", line.to_string());
+            // println!("{}", line.to_string());
             let _ = req_tx.send(line.to_string());
         }
     }
@@ -249,13 +249,13 @@ impl View {
             .parse()
             .expect("Unable to parse socket address");
         let timeout = 2;
-        println!("Connecting chat... {}", host);
+        // println!("Connecting chat... {}", host);
         let timeout_initial = timeout as u64;
         let timeout = std::time::Duration::from_secs(timeout_initial);
         let stream = match TcpStream::connect_timeout(&host, timeout) {
             Ok(s) => s,
             Err(_) => {
-                println!("Socket error");
+                // println!("Socket error");
                 panic!("Omg");
             }
         };
