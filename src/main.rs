@@ -197,7 +197,7 @@ enum Connected {
     None,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Default)]
 struct Credentials {
     server: String,
     user: String,

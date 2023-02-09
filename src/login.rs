@@ -14,12 +14,12 @@ pub struct Login {
 
 impl Login {
     pub fn update(&mut self, ctx: &egui::Context) -> bool {
-        let credentials = {
-            // Load the first file into a string.
-            let text = std::fs::read_to_string(&"credentials.json").unwrap();
-
-            // Parse the string into a dynamically-typed JSON structure.
-            serde_json::from_str::<Credentials>(&text).unwrap()
+        let credentials = match std::fs::read_to_string(&"credentials.json") {
+            Ok(text) => {
+                // Parse the string into a dynamically-typed JSON structure.
+                serde_json::from_str::<Credentials>(&text).unwrap()
+            }
+            _ => Credentials::default()
         };
         self.user = credentials.user;
         self.server = credentials.server;

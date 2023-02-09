@@ -15,4 +15,5 @@ This is a test project in Rust programming language to connect to a pvpgn server
 * Code beautify
 * Right click on user
 * Message styles in main panel
+* A lot of error handling
 * ...
