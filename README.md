@@ -11,7 +11,7 @@ This is a test project in Rust programming language to connect to a pvpgn server
 #### `cargo run`
 
 ## Not yet there
-* Submit on enter on message input
+~~* Submit on enter on message input~~
 * Styles
 * Icons
 * Code beautify
