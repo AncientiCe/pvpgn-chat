@@ -19,3 +19,5 @@ This is a test project in Rust programming language to connect to a pvpgn server
 * Message styles in main panel
 * A lot of error handling
 * ...
+
+It's full of bugs, but it's a working POC.
