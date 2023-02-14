@@ -1,18 +1,15 @@
 use std::net::{TcpStream};
 
-use std::io::{BufWriter, Read, Write};
+use std::io::{Read, Write};
 
 #[derive(Debug)]
 pub struct Connect {
     stream: TcpStream,
-    writer: BufWriter<TcpStream>,
 }
 
 impl Connect {
     pub(crate) fn new(stream: TcpStream) -> Connect {
-        let stream_clone = stream.try_clone().unwrap();
-        let writer = BufWriter::new(stream_clone);
-        Connect {stream, writer}
+        Connect {stream}
     }
 
     fn waitfor(&mut self, wait_s: &str) {

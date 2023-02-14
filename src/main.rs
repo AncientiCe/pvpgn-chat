@@ -113,11 +113,13 @@ impl Main {
             });
         });
         egui::CentralPanel::default().show(ctx, |ui| {
-            for x in self.messages.clone() {
-                ui.horizontal(|ui| {
-                    ui.label(x);
-                });
-            }
+            egui::ScrollArea::vertical().show(ui, |ui| {
+                for x in self.messages.clone() {
+                    ui.horizontal(|ui| {
+                        ui.label(x);
+                    });
+                }
+            });
         });
     }
 
