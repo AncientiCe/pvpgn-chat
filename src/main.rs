@@ -113,7 +113,7 @@ impl Main {
             });
         });
         egui::CentralPanel::default().show(ctx, |ui| {
-            egui::ScrollArea::vertical().show(ui, |ui| {
+            egui::ScrollArea::vertical().max_width(f32::INFINITY).stick_to_bottom(true).show(ui, |ui| {
                 for x in self.messages.clone() {
                     ui.horizontal(|ui| {
                         ui.label(x);
@@ -143,7 +143,7 @@ impl Main {
         };
 
         // skip text type as we validate on code
-        parts.next().unwrap();
+        parts.next().unwrap_or("");
         match message_type.as_ref() {
             "USER" => {
                 let user = parts.next().unwrap();
@@ -188,15 +188,17 @@ fn read(mut stream: TcpStream, req_tx: Sender<String>) {
     let mut buffer = [0; 1024];
     loop {
         let n = stream.read(&mut buffer).unwrap();
-        let s = std::str::from_utf8(&buffer[..n]).expect("Found invalid utf-8");
-        // println!("Read {} bytes: {:?}", n, s);
-        let lines = s.split("\r\n");
-        for line in lines {
-            if line.is_empty() {
-                continue;
+        unsafe {
+            let s = std::str::from_utf8_unchecked(&buffer[..n]);
+            // println!("Read {} bytes: {:?}", n, s);
+            let lines = s.split("\r\n");
+            for line in lines {
+                if line.is_empty() {
+                    continue;
+                }
+                // println!("{}", line.to_string());
+                let _ = req_tx.send(line.to_string());
             }
-            // println!("{}", line.to_string());
-            let _ = req_tx.send(line.to_string());
         }
     }
 }
