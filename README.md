@@ -7,6 +7,7 @@ This is a test project in Rust programming language to connect to a pvpgn server
 ## To test
 
 ** Observation: `Server` needs to be ip+port
+`116.203.95.137:6112`
 
 #### `cargo run`
 
