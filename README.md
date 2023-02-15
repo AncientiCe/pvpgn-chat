@@ -10,6 +10,10 @@ This is a test project in Rust programming language to connect to a pvpgn server
 
 #### `cargo run`
 
+
+- [x] Fixed scrolling
+- [x] Added unsafe to char reading from tcpstream
+
 ## Not yet there
 ~~* Submit on enter on message input~~
 * Styles
