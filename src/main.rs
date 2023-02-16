@@ -11,6 +11,7 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 use crate::connect::Connect;
 
 use eframe::egui;
+use eframe::egui::{Label, Sense};
 use serde::{Deserialize, Serialize};
 use crate::Connected::Done;
 
@@ -91,35 +92,68 @@ impl Main {
         if let Ok(response) = self.response.try_recv() {
             self.parse_message(response);
         }
-        egui::SidePanel::right("sidebar_users").show(ctx, |ui| {
-            egui::ScrollArea::vertical().show(ui, |ui| {
-                for x in self.users.clone() {
-                    ui.horizontal(|ui| {
-                        ui.label(x);
-                    });
-                }
-            });
-        });
-        egui::TopBottomPanel::bottom("actions").show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                let input = ui.text_edit_singleline(&mut self.message);
-                if input.lost_focus() && input.ctx.input().key_pressed(egui::Key::Enter) {
-                    input.request_focus();
-                    self.send_input();
-                }
-                let button = egui::Button::new("Submit");
-                if ui.add(button).clicked() {
-                    self.send_input();
-                }
-            });
-        });
         egui::CentralPanel::default().show(ctx, |ui| {
-            egui::ScrollArea::vertical().max_width(f32::INFINITY).stick_to_bottom(true).show(ui, |ui| {
-                for x in self.messages.clone() {
-                    ui.horizontal(|ui| {
-                        ui.label(x);
-                    });
-                }
+            let input_id = ui.make_persistent_id("input_text_id");
+            egui::TopBottomPanel::bottom("actions").show(ctx, |ui| {
+                ui.horizontal(|ui| {
+
+                    let input = ui.add(egui::TextEdit::singleline(&mut self.message)
+                        .id(input_id));
+
+                    if input.lost_focus() && input.ctx.input().key_pressed(egui::Key::Enter) {
+                        input.request_focus();
+                        self.send_input();
+                    }
+                    let button = egui::Button::new("Submit");
+                    if ui.add(button).clicked() {
+                        self.send_input();
+                    }
+                });
+            });
+            egui::SidePanel::right("sidebar_users").show(ctx, |ui| {
+                egui::ScrollArea::vertical().show(ui, |ui| {
+                    for x in self.users.clone() {
+                        ui.horizontal(|ui| {
+                            let user_name = String::from(&x);
+                            let response = ui.add(Label::new(x).sense(Sense::click()));
+                            response.context_menu(|ui| {
+                                if ui.button("Whisper").clicked() {
+                                    self.message = format!("/w {} ", user_name);
+                                    ctx.memory().request_focus(input_id);
+                                    ui.close_menu();
+                                }
+                                if ui.button("Ping").clicked() {
+                                    self.message = format!("/ping {}", user_name);
+                                    ctx.memory().request_focus(input_id);
+                                    self.send_input();
+                                    ui.close_menu();
+                                }
+                                if ui.button("Watch").clicked() {
+                                    self.message = format!("/watch {}", user_name);
+                                    ctx.memory().request_focus(input_id);
+                                    self.send_input();
+                                    ui.close_menu();
+                                }
+                                if ui.button("Unwatch").clicked() {
+                                    self.message = format!("/unwatch {}", user_name);
+                                    ctx.memory().request_focus(input_id);
+                                    self.send_input();
+                                    ui.close_menu();
+                                }
+                            });
+                        });
+                    }
+                });
+            });
+
+            egui::CentralPanel::default().show(ctx, |ui| {
+                egui::ScrollArea::vertical().max_width(f32::INFINITY).stick_to_bottom(true).show(ui, |ui| {
+                    for x in self.messages.clone() {
+                        ui.horizontal(|ui| {
+                            ui.label(x);
+                        });
+                    }
+                });
             });
         });
     }
