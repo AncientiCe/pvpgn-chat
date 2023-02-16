@@ -104,6 +104,7 @@ impl Main {
             ui.horizontal(|ui| {
                 let input = ui.text_edit_singleline(&mut self.message);
                 if input.lost_focus() && input.ctx.input().key_pressed(egui::Key::Enter) {
+                    input.request_focus();
                     self.send_input();
                 }
                 let button = egui::Button::new("Submit");
