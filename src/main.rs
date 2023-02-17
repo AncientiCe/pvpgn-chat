@@ -67,7 +67,7 @@ impl Main {
             ("1018", "INFO"),
             ("1019", "ERROR"),
             ("1020", "STATS"),
-            ("1021", "INGAME"),
+            ("1005", "TALK"),
             ("1022", "LOGGED_IN"),
             ("1023", "LOGGED_OUT"),
             ("1002", "JOIN"),
@@ -213,8 +213,12 @@ impl Main {
             }
             "ERROR" | "UNKNOWN" | "INFO" => {
                 self.messages.push(format!("{}: {}", message_type, parts.collect::<Vec<_>>().join(" ")));
+                self.messages.push(format!("Unknown: {}", line));
             },
-            _ => {}
+            "CHANNEL" => {
+                self.users.clear();
+            },
+            _ => self.messages.push(format!("Unknown: {}", line)),
         }
     }
 }
