@@ -4,6 +4,8 @@ This is a test project in Rust programming language to connect to a pvpgn server
 
 ![](demo.gif)
 
+[W3 Developers discord](https://discord.gg/jq6rPHc95D)
+
 ## To test
 
 ** Observation: `Server` needs to be ip+port
