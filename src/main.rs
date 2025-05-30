@@ -23,11 +23,12 @@ fn main() {
         // initial_window_size: Some(egui::vec2(320.0, 240.0)),
         ..Default::default()
     };
-    eframe::run_native(
+    let _ = eframe::run_native(
         "Bnet chat",
         options,
-        Box::new(|_cc| Box::new(MyApp::default())),
+        Box::new(|_cc| Ok(Box::new(MyApp::default())))
     );
+
 }
 
 /// Which view is currectly open
@@ -100,7 +101,7 @@ impl Main {
                     let input = ui.add(egui::TextEdit::singleline(&mut self.message)
                         .id(input_id));
 
-                    if input.lost_focus() && input.ctx.input().key_pressed(egui::Key::Enter) {
+                    if input.lost_focus() && input.ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
                         input.request_focus();
                         self.send_input();
                     }
@@ -119,24 +120,24 @@ impl Main {
                             response.context_menu(|ui| {
                                 if ui.button("Whisper").clicked() {
                                     self.message = format!("/w {} ", user_name);
-                                    ctx.memory().request_focus(input_id);
+                                    ctx.memory_mut(|mem| mem.request_focus(input_id));
                                     ui.close_menu();
                                 }
                                 if ui.button("Ping").clicked() {
                                     self.message = format!("/ping {}", user_name);
-                                    ctx.memory().request_focus(input_id);
+                                    ctx.memory_mut(|mem| mem.request_focus(input_id));
                                     self.send_input();
                                     ui.close_menu();
                                 }
                                 if ui.button("Watch").clicked() {
                                     self.message = format!("/watch {}", user_name);
-                                    ctx.memory().request_focus(input_id);
+                                    ctx.memory_mut(|mem| mem.request_focus(input_id));
                                     self.send_input();
                                     ui.close_menu();
                                 }
                                 if ui.button("Unwatch").clicked() {
                                     self.message = format!("/unwatch {}", user_name);
-                                    ctx.memory().request_focus(input_id);
+                                    ctx.memory_mut(|mem| mem.request_focus(input_id));
                                     self.send_input();
                                     ui.close_menu();
                                 }
@@ -181,8 +182,11 @@ impl Main {
         parts.next().unwrap_or("");
         match message_type.as_ref() {
             "USER" => {
-                let user = parts.next().unwrap();
-                self.users.insert(user.to_string().to_owned());
+                if let Some(user) = parts.next() {
+                    self.users.insert(user.to_string());
+                } else {
+                    self.messages.push(format!("Malformed USER message: {}", line));
+                }
             }
             "JOIN" => {
                 let user = parts.next().unwrap();
