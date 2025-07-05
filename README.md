@@ -20,11 +20,11 @@ This is a test project in Rust programming language to connect to a pvpgn server
 
 ## Not yet there
 ~~* Submit on enter on message input~~
-* Styles
+~~* Styles~~
 * Icons
-* Code beautify
+~~* Code beautify~~
 * Message styles in main panel
-* A lot of error handling
+~~* A lot of error handling~~
 * ...
 
 It's full of bugs, but it's a working POC.
