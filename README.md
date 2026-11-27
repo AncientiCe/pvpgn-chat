@@ -13,6 +13,12 @@ This is a test project in Rust programming language to connect to a pvpgn server
 
 #### `cargo run`
 
+#### GPUI prototype: `cargo run -p bnetchat-gpui`
+
+A second front end built on [GPUI](https://www.gpui.rs/) (Zed's UI framework) with
+[gpui-kit](https://crates.io/crates/gpui-kit) components. Both apps share the
+protocol, session and chat state in `src/lib.rs`; only the UI differs.
+
 
 - [x] Fixed scrolling
 - [x] Added unsafe to char reading from tcpstream

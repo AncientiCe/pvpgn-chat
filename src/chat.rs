@@ -83,6 +83,9 @@ pub struct ChatState {
     pub friends: HashSet<String>,
     pub ignored: HashSet<String>,
     pub connected: bool,
+    /// How many old messages have been dropped from the front so far, so
+    /// virtual lists can keep their row count in sync.
+    pub dropped: u64,
     max_messages: usize,
 }
 
@@ -104,6 +107,7 @@ impl ChatState {
             friends: HashSet::new(),
             ignored: HashSet::new(),
             connected: true,
+            dropped: 0,
             max_messages: 1000,
         }
     }
@@ -117,6 +121,7 @@ impl ChatState {
         });
         while self.messages.len() > self.max_messages {
             self.messages.pop_front();
+            self.dropped += 1;
         }
     }
 
@@ -303,6 +308,7 @@ mod tests {
         }
         assert_eq!(s.messages.len(), 1000);
         assert_eq!(s.messages.front().unwrap().text, "100");
+        assert_eq!(s.dropped, 100);
     }
 
     #[test]
