@@ -223,7 +223,7 @@ impl Connect {
         let mut extra = self.waitfor("Password:")?;
         all_extra_messages.append(&mut extra);
 
-        info!("Sending password...");
+        info!("Sending password ({} chars)...", password.chars().count());
         self.stream.write_all(format!("{}\r\n", password).as_bytes())
             .map_err(|e| format!("Failed to send password: {}", e))?;
         self.stream.flush().map_err(|e| format!("Failed to flush stream: {}", e))?;

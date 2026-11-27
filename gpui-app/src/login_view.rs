@@ -25,12 +25,11 @@ impl LoginView {
         let saved = Credentials::load().unwrap_or_default();
 
         let field = |placeholder: &'static str, value: String, masked: bool, window: &mut Window, cx: &mut Context<Self>| {
-            cx.new(|cx| {
-                InputState::new(window, cx)
-                    .placeholder(placeholder)
-                    .default_value(value)
-                    .masked(masked)
-            })
+            let input = cx.new(|cx| InputState::new(window, cx).placeholder(placeholder).masked(masked));
+            // set_value (not default_value) so the display is built from the
+            // same text that value() later returns.
+            input.update(cx, |input, cx| input.set_value(value, window, cx));
+            input
         };
         let server = field("host:port, e.g. 127.0.0.1:6112", saved.server, false, window, cx);
         let user = field("Username", saved.user, false, window, cx);
