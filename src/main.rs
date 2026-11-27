@@ -95,16 +95,16 @@ impl App {
         let ctx = ctx.clone();
 
         thread::spawn(move || {
-            if let Ok(json) = serde_json::to_string_pretty(&cred) {
-                let _ = std::fs::write("credentials.json", json);
-            }
             let (event_tx, event_rx) = channel();
             let wake = ctx.clone();
             let result = Session::connect(&cred, move |event| {
                 let _ = event_tx.send(event);
                 wake.request_repaint();
             })
-            .map(|session| (session, event_rx));
+            .map(|session| {
+                cred.save();
+                (session, event_rx)
+            });
             let _ = result_tx.send(result);
             ctx.request_repaint();
         });

@@ -40,15 +40,11 @@ impl Default for Login {
             user_error: None,
             password_error: None,
         };
-        if let Ok(text) = std::fs::read_to_string("credentials.json") {
-
-                // Parse the string into a dynamically-typed JSON structure.
-            if let Ok(credentials) = serde_json::from_str::<Credentials>(&text) {
-                login.user.push_str(&credentials.user);
-                login.server.push_str(&credentials.server);
-                login.password.push_str(&credentials.password);
-            }
-        };
+        if let Some(credentials) = Credentials::load() {
+            login.user = credentials.user;
+            login.server = credentials.server;
+            login.password = credentials.password;
+        }
 
         login
     }

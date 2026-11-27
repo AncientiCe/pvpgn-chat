@@ -51,15 +51,15 @@ impl BnetApp {
         cx.notify();
         log::info!("Connecting to {} as {}", cred.server, cred.user);
 
-        if let Ok(json) = serde_json::to_string_pretty(&cred) {
-            let _ = std::fs::write("credentials.json", json);
-        }
-
         let (tx, rx) = smol::channel::unbounded::<ServerEvent>();
         let login = cx.background_executor().spawn(async move {
-            Session::connect(&cred, move |event| {
+            let session = Session::connect(&cred, move |event| {
                 let _ = tx.try_send(event);
-            })
+            });
+            if session.is_ok() {
+                cred.save();
+            }
+            session
         });
 
         let task = cx.spawn_in(window, async move |this, cx| {

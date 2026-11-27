@@ -22,10 +22,7 @@ impl EventEmitter<LoginEvent> for LoginView {}
 
 impl LoginView {
     pub fn new(error: Option<String>, window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let saved: Credentials = std::fs::read_to_string("credentials.json")
-            .ok()
-            .and_then(|s| serde_json::from_str(&s).ok())
-            .unwrap_or_default();
+        let saved = Credentials::load().unwrap_or_default();
 
         let field = |placeholder: &'static str, value: String, masked: bool, window: &mut Window, cx: &mut Context<Self>| {
             cx.new(|cx| {
@@ -57,7 +54,14 @@ impl LoginView {
             .find(|i| i.read(cx).value().is_empty())
             .unwrap_or(&password)
             .clone();
-        first_empty.update(cx, |input, cx| input.focus(window, cx));
+        // Select a prefilled value so typing replaces it instead of mixing
+        // into the (masked) saved text.
+        first_empty.update(cx, |input, cx| {
+            input.focus(window, cx);
+            if !input.value().is_empty() {
+                input.select_all(window, cx);
+            }
+        });
 
         Self { server, user, password, error, _subscriptions }
     }
