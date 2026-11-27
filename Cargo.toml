@@ -1,19 +1,19 @@
 [package]
 name = "bnetchat"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 publish = false
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+license = "MIT"
+description = "PvPGN chat-gateway protocol, session, chat state and saved accounts"
 
 [dependencies]
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 serde = { version = "1.0", features = ["derive"] }
-eframe = "0.31.1"
 serde_json = "1.0.92"
 keyring = { version = "3.6.3", features = ["windows-native", "apple-native", "linux-native"] }
 
 [workspace]
 members = [".", "gpui-app"]
+# Plain `cargo run` / `cargo build` / `cargo test` cover the library and the app.
+default-members = [".", "gpui-app"]
 resolver = "2"

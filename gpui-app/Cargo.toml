@@ -1,9 +1,10 @@
 [package]
-name = "bnetchat-gpui"
-version = "0.1.0"
+name = "pvpgn-chat"
+version = "0.2.0"
 edition = "2021"
 publish = false
-description = "Prototype GPUI front end for bnetchat"
+license = "MIT"
+description = "Desktop chat client for PvPGN servers"
 
 [dependencies]
 bnetchat = { path = ".." }

@@ -162,12 +162,21 @@ impl ChatState {
                 self.users.insert(name, UserRole::from_flags(&flags));
             }
             ServerEvent::Join { name, flags } => {
-                self.users.insert(name.clone(), UserRole::from_flags(&flags));
-                self.push(MessageKind::JoinLeave, None, format!("{name} joined the channel"));
+                self.users
+                    .insert(name.clone(), UserRole::from_flags(&flags));
+                self.push(
+                    MessageKind::JoinLeave,
+                    None,
+                    format!("{name} joined the channel"),
+                );
             }
             ServerEvent::Leave { name } => {
                 self.users.remove(&name);
-                self.push(MessageKind::JoinLeave, None, format!("{name} left the channel"));
+                self.push(
+                    MessageKind::JoinLeave,
+                    None,
+                    format!("{name} left the channel"),
+                );
             }
             ServerEvent::Talk { from, text } => {
                 if !self.ignored.contains(&from) {
@@ -188,7 +197,9 @@ impl ChatState {
                 let me = self.me.clone();
                 self.push_whisper(&me, &to, text);
             }
-            ServerEvent::Broadcast { text } => self.push(MessageKind::System, None, format!("Broadcast: {text}")),
+            ServerEvent::Broadcast { text } => {
+                self.push(MessageKind::System, None, format!("Broadcast: {text}"))
+            }
             ServerEvent::Channel { name } => {
                 self.users.clear();
                 self.topic = None;
@@ -204,7 +215,9 @@ impl ChatState {
             ServerEvent::Info { text } => self.push(MessageKind::Info, None, text),
             ServerEvent::Error { text } => self.push(MessageKind::Error, None, text),
             ServerEvent::Null => {}
-            ServerEvent::Malformed { line } => self.push(MessageKind::Error, None, format!("Malformed: {line}")),
+            ServerEvent::Malformed { line } => {
+                self.push(MessageKind::Error, None, format!("Malformed: {line}"))
+            }
             ServerEvent::Unknown { line } => self.push(MessageKind::System, None, line),
             ServerEvent::Disconnected { reason } => {
                 self.connected = false;
@@ -216,7 +229,10 @@ impl ChatState {
     /// Users sorted by role (admins first), then case-insensitively by name.
     pub fn sorted_users(&self) -> Vec<(&str, UserRole)> {
         let mut users: Vec<_> = self.users.iter().map(|(n, r)| (n.as_str(), *r)).collect();
-        users.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.to_lowercase().cmp(&b.0.to_lowercase())));
+        users.sort_by(|a, b| {
+            b.1.cmp(&a.1)
+                .then_with(|| a.0.to_lowercase().cmp(&b.0.to_lowercase()))
+        });
         users
     }
 
@@ -258,7 +274,9 @@ pub fn reply_prefix(msg: &ChatMessage) -> Option<String> {
 /// (no quote text, so bot commands like `.map` still work). Quoting a
 /// channel line prefixes a short quote and sends it to the channel.
 pub fn compose_outgoing(input: &str, quoted: Option<&ChatMessage>) -> String {
-    let Some(q) = quoted else { return input.to_string() };
+    let Some(q) = quoted else {
+        return input.to_string();
+    };
 
     if let Some(peer) = &q.peer {
         // Don't double the command if the input already starts with it.
@@ -306,7 +324,9 @@ pub fn initials(name: &str) -> String {
 
 /// A stable index in `0..palette_len` for coloring a user's avatar.
 pub fn avatar_index(name: &str, palette_len: usize) -> usize {
-    let hash = name.bytes().fold(0u32, |h, b| h.wrapping_mul(31).wrapping_add(b as u32));
+    let hash = name
+        .bytes()
+        .fold(0u32, |h, b| h.wrapping_mul(31).wrapping_add(b as u32));
     hash as usize % palette_len.max(1)
 }
 
@@ -324,22 +344,34 @@ mod tests {
     #[test]
     fn channel_join_resets_users_and_tracks_roster() {
         let mut s = ChatState::new("me");
-        feed(&mut s, &[
-            "1007 CHANNEL \"W3\"",
-            "1001 USER Alice 0010 [W3XP]",
-            "1001 USER bob 0000 [W3XP]",
-            "1002 JOIN Carl 0002 [W3XP]",
-            "1003 LEAVE bob 0000",
-        ]);
+        feed(
+            &mut s,
+            &[
+                "1007 CHANNEL \"W3\"",
+                "1001 USER Alice 0010 [W3XP]",
+                "1001 USER bob 0000 [W3XP]",
+                "1002 JOIN Carl 0002 [W3XP]",
+                "1003 LEAVE bob 0000",
+            ],
+        );
         assert_eq!(s.channel.as_deref(), Some("W3"));
-        assert_eq!(s.sorted_users(), vec![("Alice", UserRole::Admin), ("Carl", UserRole::Moderator)]);
+        assert_eq!(
+            s.sorted_users(),
+            vec![("Alice", UserRole::Admin), ("Carl", UserRole::Moderator)]
+        );
     }
 
     #[test]
     fn ignored_users_are_hidden() {
         let mut s = ChatState::new("me");
         s.set_ignored("troll", true);
-        feed(&mut s, &["1005 TALK troll 0000 \"spam\"", "1005 TALK Ann 0000 \"hi me\""]);
+        feed(
+            &mut s,
+            &[
+                "1005 TALK troll 0000 \"spam\"",
+                "1005 TALK Ann 0000 \"hi me\"",
+            ],
+        );
         assert_eq!(s.messages.len(), 1);
         assert_eq!(s.messages[0].display_text(), "Ann: hi me");
         assert!(s.is_highlight(&s.messages[0]));
@@ -359,16 +391,28 @@ mod tests {
     #[test]
     fn whispers_reply_and_quote_with_w_command() {
         let mut s = ChatState::new("me");
-        feed(&mut s, &["1004 WHISPER Bob 0000 \"want to scrim?\"", "1010 WHISPER Ann 0000 \"hi\""]);
+        feed(
+            &mut s,
+            &[
+                "1004 WHISPER Bob 0000 \"want to scrim?\"",
+                "1010 WHISPER Ann 0000 \"hi\"",
+            ],
+        );
         let incoming = &s.messages[0];
         let outgoing = &s.messages[1];
         assert_eq!(incoming.display_text(), "Bob whispers: want to scrim?");
         assert_eq!(outgoing.display_text(), "You whisper to Ann: hi");
         assert_eq!(reply_prefix(incoming).as_deref(), Some("/w Bob "));
         assert_eq!(reply_prefix(outgoing).as_deref(), Some("/w Ann "));
-        assert_eq!(compose_outgoing(".map footmen", Some(incoming)), "/w Bob .map footmen");
+        assert_eq!(
+            compose_outgoing(".map footmen", Some(incoming)),
+            "/w Bob .map footmen"
+        );
         // Typing the /w yourself does not double it.
-        assert_eq!(compose_outgoing("/w Bob sure", Some(incoming)), "/w Bob sure");
+        assert_eq!(
+            compose_outgoing("/w Bob sure", Some(incoming)),
+            "/w Bob sure"
+        );
     }
 
     #[test]
@@ -377,7 +421,13 @@ mod tests {
         assert_eq!(initials("bob"), "B");
         assert_eq!(initials("big bob"), "BB");
         assert_eq!(initials(""), "?");
-        let q = ChatMessage { kind: MessageKind::Talk, author: Some("Ann".into()), text: "x".into(), timestamp: 0, peer: None };
+        let q = ChatMessage {
+            kind: MessageKind::Talk,
+            author: Some("Ann".into()),
+            text: "x".into(),
+            timestamp: 0,
+            peer: None,
+        };
         assert_eq!(compose_outgoing("ok", Some(&q)), "[Ann 00:00: \"x\"] ok");
         assert_eq!(reply_prefix(&q), None);
     }

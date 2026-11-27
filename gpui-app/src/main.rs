@@ -1,7 +1,9 @@
-//! GPUI front end for bnetchat (prototype).
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // no console window in release builds
+
+//! pvpgn-chat: desktop chat client for PvPGN servers, built on GPUI.
 //!
-//! Same protocol and chat state as the egui app (the `bnetchat` library);
-//! only the UI differs. Run with `cargo run -p bnetchat-gpui`.
+//! Protocol, session, chat state and saved accounts come from the `bnetchat`
+//! library; this crate is the UI. Run with `cargo run -p pvpgn-chat`.
 
 mod chat_view;
 mod login_view;
@@ -29,17 +31,24 @@ struct BnetApp {
 
 impl BnetApp {
     fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let mut app = Self { screen: Screen::Connecting, _subscriptions: vec![], _tasks: vec![] };
+        let mut app = Self {
+            screen: Screen::Connecting,
+            _subscriptions: vec![],
+            _tasks: vec![],
+        };
         app.show_login(None, window, cx);
         app
     }
 
     fn show_login(&mut self, error: Option<String>, window: &mut Window, cx: &mut Context<Self>) {
         let login = cx.new(|cx| LoginView::new(error, window, cx));
-        self._subscriptions = vec![cx.subscribe_in(&login, window, |this, _, event: &LoginEvent, window, cx| {
-            let LoginEvent::Connect(cred) = event;
-            this.connect(cred.clone(), window, cx);
-        })];
+        self._subscriptions =
+            vec![
+                cx.subscribe_in(&login, window, |this, _, event: &LoginEvent, window, cx| {
+                    let LoginEvent::Connect(cred) = event;
+                    this.connect(cred.clone(), window, cx);
+                }),
+            ];
         self.screen = Screen::Login(login);
         cx.notify();
     }
@@ -69,12 +78,13 @@ impl BnetApp {
             let chat = this.update_in(cx, |this, window, cx| match session {
                 Ok(session) => {
                     let chat = cx.new(|cx| ChatView::new(session, window, cx));
-                    this._subscriptions =
-                        vec![cx.subscribe_in(&chat, window, |this, _, event: &ChatViewEvent, window, cx| {
-                            match event {
-                                ChatViewEvent::LoggedOut => this.show_login(None, window, cx),
-                            }
-                        })];
+                    this._subscriptions = vec![cx.subscribe_in(
+                        &chat,
+                        window,
+                        |this, _, event: &ChatViewEvent, window, cx| match event {
+                            ChatViewEvent::LoggedOut => this.show_login(None, window, cx),
+                        },
+                    )];
                     this.screen = Screen::Chat(chat.clone());
                     cx.notify();
                     Some(chat)
@@ -94,7 +104,10 @@ impl BnetApp {
                 while let Ok(more) = rx.try_recv() {
                     batch.push(more);
                 }
-                if chat.update(cx, |chat, cx| chat.apply_events(batch, cx)).is_err() {
+                if chat
+                    .update(cx, |chat, cx| chat.apply_events(batch, cx))
+                    .is_err()
+                {
                     break;
                 }
             }
@@ -121,13 +134,17 @@ impl Render for BnetApp {
                     .justify_center()
                     .gap_3()
                     .child(gpui_kit::component::spinner::Spinner::new())
-                    .child(div().text_color(theme.muted_foreground).child("Connecting to server…"))
+                    .child(
+                        div()
+                            .text_color(theme.muted_foreground)
+                            .child("Connecting to server…"),
+                    )
                     .into_any_element(),
             })
     }
 }
 
-/// Dark/light preference, shared with the egui app.
+/// Dark/light preference, remembered in `theme.json`.
 pub fn load_dark_preference() -> bool {
     std::fs::read_to_string("theme.json")
         .ok()
@@ -136,7 +153,11 @@ pub fn load_dark_preference() -> bool {
 }
 
 pub fn set_dark(dark: bool, window: &mut Window, cx: &mut App) {
-    let mode = if dark { ThemeMode::Dark } else { ThemeMode::Light };
+    let mode = if dark {
+        ThemeMode::Dark
+    } else {
+        ThemeMode::Light
+    };
     Theme::change(mode, Some(window), cx);
     let _ = std::fs::write("theme.json", if dark { "true" } else { "false" });
 }
@@ -155,17 +176,30 @@ fn main() {
         .run(move |cx| {
             gpui_kit::init(cx);
             let dark = load_dark_preference();
-            Theme::change(if dark { ThemeMode::Dark } else { ThemeMode::Light }, None, cx);
+            Theme::change(
+                if dark {
+                    ThemeMode::Dark
+                } else {
+                    ThemeMode::Light
+                },
+                None,
+                cx,
+            );
 
             let bounds = Bounds::centered(None, size(px(1100.), px(720.)), cx);
             let options = WindowOptions {
                 window_bounds: Some(WindowBounds::Windowed(bounds)),
-                titlebar: Some(TitlebarOptions { title: Some("Bnet Chat".into()), ..Default::default() }),
+                titlebar: Some(TitlebarOptions {
+                    title: Some("Bnet Chat".into()),
+                    ..Default::default()
+                }),
                 window_min_size: Some(size(px(560.), px(420.))),
                 ..Default::default()
             };
-            gpui_kit::open_window(options, cx, |window, cx| cx.new(|cx| BnetApp::new(window, cx)))
-                .expect("failed to open window");
+            gpui_kit::open_window(options, cx, |window, cx| {
+                cx.new(|cx| BnetApp::new(window, cx))
+            })
+            .expect("failed to open window");
             // Closing the window quits the app (which logs out, see ChatView).
             cx.on_window_closed(|cx, _| {
                 if cx.windows().is_empty() {

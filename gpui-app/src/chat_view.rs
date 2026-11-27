@@ -110,7 +110,8 @@ impl ChatView {
         let line = chat::compose_outgoing(&text, self.quoted.as_ref());
         self.send_line(&line, cx);
         self.quoted = None;
-        self.input.update(cx, |input, cx| input.set_value("", window, cx));
+        self.input
+            .update(cx, |input, cx| input.set_value("", window, cx));
     }
 
     fn set_input(&mut self, text: String, window: &mut Window, cx: &mut Context<Self>) {
@@ -128,7 +129,11 @@ impl ChatView {
     fn render_sidebar(&self, window: &Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.theme();
         let dark = theme.mode.is_dark();
-        let channel = self.chat.channel.clone().unwrap_or_else(|| "Not in a channel".into());
+        let channel = self
+            .chat
+            .channel
+            .clone()
+            .unwrap_or_else(|| "Not in a channel".into());
 
         div()
             .w(px(240.))
@@ -196,7 +201,13 @@ impl ChatView {
                             .min_w_0()
                             .flex()
                             .flex_col()
-                            .child(div().text_sm().font_semibold().truncate().child(self.chat.me.clone()))
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .font_semibold()
+                                    .truncate()
+                                    .child(self.chat.me.clone()),
+                            )
                             .child(status_line(self.chat.connected, cx)),
                     )
                     .child(
@@ -230,8 +241,17 @@ impl ChatView {
             .flex_shrink_0()
             .border_b_1()
             .border_color(theme.border)
-            .child(div().text_xl().text_color(theme.muted_foreground).child("#"))
-            .child(div().font_semibold().child(self.chat.channel.clone().unwrap_or_default()))
+            .child(
+                div()
+                    .text_xl()
+                    .text_color(theme.muted_foreground)
+                    .child("#"),
+            )
+            .child(
+                div()
+                    .font_semibold()
+                    .child(self.chat.channel.clone().unwrap_or_default()),
+            )
             .children(self.chat.topic.clone().map(|topic| {
                 div()
                     .flex_1()
@@ -249,7 +269,11 @@ impl ChatView {
                 Button::new("members")
                     .ghost()
                     .small()
-                    .icon(if self.show_members { IconName::PanelRightClose } else { IconName::PanelRightOpen })
+                    .icon(if self.show_members {
+                        IconName::PanelRightClose
+                    } else {
+                        IconName::PanelRightOpen
+                    })
                     .tooltip("Toggle member list")
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.show_members = !this.show_members;
@@ -261,13 +285,28 @@ impl ChatView {
     fn render_transcript(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let weak = cx.entity().downgrade();
         let surface = cx.theme().background;
-        MessageScroller::new("transcript", self.scroller.clone(), move |index, _window, cx| {
-            let Some(entity) = weak.upgrade() else { return div().into_any_element() };
-            let this = entity.read(cx);
-            let Some(msg) = this.chat.messages.get(index) else { return div().into_any_element() };
-            let prev = index.checked_sub(1).and_then(|i| this.chat.messages.get(i));
-            render_message(msg, prev, this.chat.is_highlight(msg), index, weak.clone(), cx)
-        })
+        MessageScroller::new(
+            "transcript",
+            self.scroller.clone(),
+            move |index, _window, cx| {
+                let Some(entity) = weak.upgrade() else {
+                    return div().into_any_element();
+                };
+                let this = entity.read(cx);
+                let Some(msg) = this.chat.messages.get(index) else {
+                    return div().into_any_element();
+                };
+                let prev = index.checked_sub(1).and_then(|i| this.chat.messages.get(i));
+                render_message(
+                    msg,
+                    prev,
+                    this.chat.is_highlight(msg),
+                    index,
+                    weak.clone(),
+                    cx,
+                )
+            },
+        )
         .with_bottom_fade(surface)
         // Rows space themselves (grouped lines sit tight, new groups get top padding).
         .with_row_style(StyleRefinement::default().pb_0())
@@ -311,10 +350,9 @@ impl ChatView {
                     .gap_2()
                     .child(div().flex_1().child(Input::new(&self.input)))
                     .child(
-                        Button::new("send")
-                            .primary()
-                            .label("Send")
-                            .on_click(cx.listener(|this, _, window, cx| this.send_input(window, cx))),
+                        Button::new("send").primary().label("Send").on_click(
+                            cx.listener(|this, _, window, cx| this.send_input(window, cx)),
+                        ),
                     ),
             )
     }
@@ -361,7 +399,12 @@ impl ChatView {
             .child(list)
     }
 
-    fn render_member(&self, name: &str, role: UserRole, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_member(
+        &self,
+        name: &str,
+        role: UserRole,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
         let theme = cx.theme();
         let is_friend = self.chat.friends.contains(name);
         let is_ignored = self.chat.ignored.contains(name);
@@ -447,7 +490,11 @@ impl Render for ChatView {
 
 fn status_line(connected: bool, cx: &App) -> impl IntoElement {
     let theme = cx.theme();
-    let (color, text) = if connected { (theme.success, "Online") } else { (theme.danger, "Disconnected") };
+    let (color, text) = if connected {
+        (theme.success, "Online")
+    } else {
+        (theme.danger, "Disconnected")
+    };
     div()
         .flex()
         .items_center()
@@ -468,7 +515,23 @@ fn selectable_text(index: usize, text: &str) -> TextView {
 fn escape_markdown(text: &str) -> String {
     let mut out = String::with_capacity(text.len() + 8);
     for c in text.chars() {
-        if matches!(c, '\\' | '`' | '*' | '_' | '[' | ']' | '<' | '>' | '#' | '|' | '~' | '-' | '+' | '.' | '!') {
+        if matches!(
+            c,
+            '\\' | '`'
+                | '*'
+                | '_'
+                | '['
+                | ']'
+                | '<'
+                | '>'
+                | '#'
+                | '|'
+                | '~'
+                | '-'
+                | '+'
+                | '.'
+                | '!'
+        ) {
             out.push('\\');
         }
         out.push(c);
@@ -508,17 +571,37 @@ fn render_message(
         .flex()
         .gap_3()
         .hover(|s| s.bg(theme.list_hover))
-        .when(highlight, |el| el.bg(theme.warning.opacity(0.08)).border_l_2().border_color(theme.warning));
+        .when(highlight, |el| {
+            el.bg(theme.warning.opacity(0.08))
+                .border_l_2()
+                .border_color(theme.warning)
+        });
 
     let row = match msg.kind {
         MessageKind::Talk | MessageKind::Own => {
             let author = msg.author.clone().unwrap_or_default();
             if continues_group(msg, prev) {
                 row.py_0p5()
-                    .child(div().w(px(48.)).flex_shrink_0().text_xs().text_color(theme.transparent).child(time))
-                    .child(div().flex_1().min_w_0().child(selectable_text(index, &msg.text)))
+                    .child(
+                        div()
+                            .w(px(48.))
+                            .flex_shrink_0()
+                            .text_xs()
+                            .text_color(theme.transparent)
+                            .child(time),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .child(selectable_text(index, &msg.text)),
+                    )
             } else {
-                let name_color = if msg.kind == MessageKind::Own { theme.primary } else { theme.foreground };
+                let name_color = if msg.kind == MessageKind::Own {
+                    theme.primary
+                } else {
+                    theme.foreground
+                };
                 row.pt_3()
                     .pb_0p5()
                     .child(Avatar::new().name(author.clone()))
@@ -533,8 +616,15 @@ fn render_message(
                                     .flex()
                                     .items_baseline()
                                     .gap_2()
-                                    .child(div().font_semibold().text_color(name_color).child(author))
-                                    .child(div().text_xs().text_color(theme.muted_foreground).child(time)),
+                                    .child(
+                                        div().font_semibold().text_color(name_color).child(author),
+                                    )
+                                    .child(
+                                        div()
+                                            .text_xs()
+                                            .text_color(theme.muted_foreground)
+                                            .child(time),
+                                    ),
                             )
                             .child(selectable_text(index, &msg.text)),
                     )
@@ -550,16 +640,33 @@ fn render_message(
             };
             row.py_1()
                 .text_sm()
-                .child(div().w(px(48.)).flex_shrink_0().flex().justify_center().text_color(color).child(icon))
+                .child(
+                    div()
+                        .w(px(48.))
+                        .flex_shrink_0()
+                        .flex()
+                        .justify_center()
+                        .text_color(color)
+                        .child(icon),
+                )
                 .child(
                     div()
                         .flex_1()
                         .min_w_0()
-                        .text_color(if kind == MessageKind::Emote { theme.foreground } else { color })
+                        .text_color(if kind == MessageKind::Emote {
+                            theme.foreground
+                        } else {
+                            color
+                        })
                         .when(kind == MessageKind::Emote, |el| el.italic())
                         .child(selectable_text(index, &msg.display_text())),
                 )
-                .child(div().text_xs().text_color(theme.muted_foreground).child(time))
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(theme.muted_foreground)
+                        .child(time),
+                )
         }
     };
 

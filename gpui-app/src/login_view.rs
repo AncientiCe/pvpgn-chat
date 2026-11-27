@@ -59,8 +59,14 @@ impl SelectItem for ServerItem {
 fn server_items() -> Vec<ServerItem> {
     KNOWN_SERVERS
         .iter()
-        .map(|(name, address)| ServerItem { name: format!("{name}  ({address})"), value: address.to_string() })
-        .chain(std::iter::once(ServerItem { name: "Other…".into(), value: OTHER_SERVER.into() }))
+        .map(|(name, address)| ServerItem {
+            name: format!("{name}  ({address})"),
+            value: address.to_string(),
+        })
+        .chain(std::iter::once(ServerItem {
+            name: "Other…".into(),
+            value: OTHER_SERVER.into(),
+        }))
         .collect()
 }
 
@@ -91,13 +97,26 @@ impl LoginView {
 
         let items = account_items(&accounts);
         let picker = cx.new(|cx| {
-            SelectState::new(items, (!accounts.is_empty()).then(|| IndexPath::new(0)), window, cx)
+            SelectState::new(
+                items,
+                (!accounts.is_empty()).then(|| IndexPath::new(0)),
+                window,
+                cx,
+            )
         });
 
-        let server_picker = cx.new(|cx| SelectState::new(server_items(), Some(IndexPath::new(0)), window, cx));
+        let server_picker =
+            cx.new(|cx| SelectState::new(server_items(), Some(IndexPath::new(0)), window, cx));
 
-        let field = |placeholder: &'static str, masked: bool, window: &mut Window, cx: &mut Context<Self>| {
-            cx.new(|cx| InputState::new(window, cx).placeholder(placeholder).masked(masked))
+        let field = |placeholder: &'static str,
+                     masked: bool,
+                     window: &mut Window,
+                     cx: &mut Context<Self>| {
+            cx.new(|cx| {
+                InputState::new(window, cx)
+                    .placeholder(placeholder)
+                    .masked(masked)
+            })
         };
         let server = field("host:port, e.g. 127.0.0.1:6112", false, window, cx);
         let user = field("Username", false, window, cx);
@@ -156,7 +175,9 @@ impl LoginView {
 
     /// Log in with the account picked in the dropdown.
     fn login_selected(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(account) = self.selected_account(cx) else { return };
+        let Some(account) = self.selected_account(cx) else {
+            return;
+        };
         match self.store.credentials(&account) {
             Some(cred) => {
                 self.error = None;
@@ -170,7 +191,9 @@ impl LoginView {
     }
 
     fn forget_selected(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(account) = self.selected_account(cx) else { return };
+        let Some(account) = self.selected_account(cx) else {
+            return;
+        };
         if let Err(e) = self.store.forget(&account) {
             self.error = Some(e);
         }
@@ -190,25 +213,41 @@ impl LoginView {
     }
 
     /// Show the manual form, prefilled from `account` if given.
-    fn open_form(&mut self, account: Option<&SavedAccount>, window: &mut Window, cx: &mut Context<Self>) {
+    fn open_form(
+        &mut self,
+        account: Option<&SavedAccount>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         self.show_form = true;
-        let (server, user) = account.map(|a| (a.server.clone(), a.user.clone())).unwrap_or_default();
+        let (server, user) = account
+            .map(|a| (a.server.clone(), a.user.clone()))
+            .unwrap_or_default();
 
         // A known server is picked in the dropdown; anything else is "Other".
-        let known = KNOWN_SERVERS.iter().position(|(_, address)| *address == server);
+        let known = KNOWN_SERVERS
+            .iter()
+            .position(|(_, address)| *address == server);
         let index = match (known, server.is_empty()) {
             (Some(i), _) => i,
             (None, true) => 0,
             (None, false) => KNOWN_SERVERS.len(),
         };
         self.manual_server = index == KNOWN_SERVERS.len();
-        self.server_picker
-            .update(cx, |p, cx| p.set_selected_index(Some(IndexPath::new(index)), window, cx));
-        let manual = if self.manual_server { server } else { String::new() };
-        self.server.update(cx, |i, cx| i.set_value(manual, window, cx));
+        self.server_picker.update(cx, |p, cx| {
+            p.set_selected_index(Some(IndexPath::new(index)), window, cx)
+        });
+        let manual = if self.manual_server {
+            server
+        } else {
+            String::new()
+        };
+        self.server
+            .update(cx, |i, cx| i.set_value(manual, window, cx));
 
         self.user.update(cx, |i, cx| i.set_value(user, window, cx));
-        self.password.update(cx, |i, cx| i.set_value("", window, cx));
+        self.password
+            .update(cx, |i, cx| i.set_value("", window, cx));
         let manual_server = self.manual_server;
         let first_empty = [&self.server, &self.user, &self.password]
             .into_iter()
@@ -224,7 +263,11 @@ impl LoginView {
         let server = if self.manual_server {
             self.server.read(cx).value().trim().to_string()
         } else {
-            self.server_picker.read(cx).selected_value().cloned().unwrap_or_default()
+            self.server_picker
+                .read(cx)
+                .selected_value()
+                .cloned()
+                .unwrap_or_default()
         };
         let cred = Credentials {
             server,
@@ -246,8 +289,18 @@ impl LoginView {
             .flex()
             .flex_col()
             .gap_3()
-            .child(div().text_xs().font_semibold().text_color(theme.muted_foreground).child("ACCOUNT"))
-            .child(Select::new(&self.picker).placeholder("Choose an account").w_full())
+            .child(
+                div()
+                    .text_xs()
+                    .font_semibold()
+                    .text_color(theme.muted_foreground)
+                    .child("ACCOUNT"),
+            )
+            .child(
+                Select::new(&self.picker)
+                    .placeholder("Choose an account")
+                    .w_full(),
+            )
             .child(
                 Button::new("login-saved")
                     .primary()
@@ -264,21 +317,31 @@ impl LoginView {
                             .ghost()
                             .small()
                             .label("Use another account")
-                            .on_click(cx.listener(|this, _, window, cx| this.open_form(None, window, cx))),
+                            .on_click(
+                                cx.listener(|this, _, window, cx| this.open_form(None, window, cx)),
+                            ),
                     )
                     .child(
                         Button::new("forget")
                             .ghost()
                             .small()
                             .label("Forget this account")
-                            .on_click(cx.listener(|this, _, window, cx| this.forget_selected(window, cx))),
+                            .on_click(
+                                cx.listener(|this, _, window, cx| this.forget_selected(window, cx)),
+                            ),
                     ),
             )
     }
 
     fn render_form(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.theme();
-        let label = |text: &'static str| div().text_xs().font_semibold().text_color(theme.muted_foreground).child(text);
+        let label = |text: &'static str| {
+            div()
+                .text_xs()
+                .font_semibold()
+                .text_color(theme.muted_foreground)
+                .child(text)
+        };
         div()
             .flex()
             .flex_col()
@@ -292,7 +355,14 @@ impl LoginView {
                     .child(Select::new(&self.server_picker).w_full())
                     .when(self.manual_server, |el| el.child(Input::new(&self.server))),
             )
-            .child(div().flex().flex_col().gap_1p5().child(label("USERNAME")).child(Input::new(&self.user)))
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_1p5()
+                    .child(label("USERNAME"))
+                    .child(Input::new(&self.user)),
+            )
             .child(
                 div()
                     .flex()
@@ -326,7 +396,13 @@ impl LoginView {
 }
 
 fn account_items(accounts: &[SavedAccount]) -> Vec<AccountItem> {
-    accounts.iter().map(|a| AccountItem { key: a.key(), account: a.clone() }).collect()
+    accounts
+        .iter()
+        .map(|a| AccountItem {
+            key: a.key(),
+            account: a.clone(),
+        })
+        .collect()
 }
 
 impl Render for LoginView {
@@ -342,8 +418,16 @@ impl Render for LoginView {
             .flex_col()
             .gap_1()
             .child(div().text_2xl().font_bold().child("Welcome back"))
-            .child(div().text_sm().text_color(theme.muted_foreground).child(subtitle));
-        let error = self.error.clone().map(|e| div().text_sm().text_color(theme.danger).child(e));
+            .child(
+                div()
+                    .text_sm()
+                    .text_color(theme.muted_foreground)
+                    .child(subtitle),
+            );
+        let error = self
+            .error
+            .clone()
+            .map(|e| div().text_sm().text_color(theme.danger).child(e));
         let card = div()
             .w(px(400.))
             .flex()
@@ -373,7 +457,10 @@ impl Render for LoginView {
             // Enter on the saved-accounts screen logs in. Only when this view
             // itself has focus, so Enter inside the open dropdown still picks.
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
-                if !this.show_form && event.keystroke.key == "enter" && this.focus.is_focused(window) {
+                if !this.show_form
+                    && event.keystroke.key == "enter"
+                    && this.focus.is_focused(window)
+                {
                     this.login_selected(window, cx);
                 }
             }))

@@ -1,6 +1,6 @@
-//! UI-independent core of the chat client: the PvPGN protocol, the
-//! connection/session, and the chat state. The egui app (`src/main.rs`) and
-//! the GPUI prototype (`gpui-app/`) are both built on this.
+//! UI-independent core of pvpgn-chat: the PvPGN chat-gateway protocol, the
+//! connection/session, the chat state and saved accounts. The desktop app in
+//! `gpui-app/` is built on this.
 
 pub mod accounts;
 pub mod chat;

@@ -1,7 +1,7 @@
-use std::net::{TcpStream};
 use std::io::{Read, Write};
+use std::net::TcpStream;
 use std::time::{Duration, Instant};
-use tracing::{info, debug};
+use tracing::{debug, info};
 
 #[derive(Debug)]
 pub struct Connect {
@@ -28,7 +28,9 @@ fn split_partial(collected: &str, wait_s: &str) -> (String, String) {
 /// The server's reasons for refusing a login (see PvPGN `handle_bot.cpp`).
 fn login_refusal(collected: &str) -> Option<&'static str> {
     if collected.contains("Account has no bot access.") {
-        Some(r"This account has no chat-gateway (bot) access. A server admin must set BNET\auth\botlogin to true for it.")
+        Some(
+            r"This account has no chat-gateway (bot) access. A server admin must set BNET\auth\botlogin to true for it.",
+        )
     } else if collected.contains("Login failed.") {
         Some("Login failed: wrong username or password, or this account is still logged in elsewhere.")
     } else {
@@ -39,7 +41,10 @@ fn login_refusal(collected: &str) -> Option<&'static str> {
 impl Connect {
     pub fn new(stream: TcpStream) -> Connect {
         let _ = stream.set_nodelay(true);
-        Connect { stream, pending: String::new() }
+        Connect {
+            stream,
+            pending: String::new(),
+        }
     }
 
     fn waitfor(&mut self, wait_s: &str) -> Result<Vec<String>, String> {
@@ -50,7 +55,9 @@ impl Connect {
         let start_time = Instant::now();
 
         // Set stream to non-blocking mode
-        self.stream.set_nonblocking(true).map_err(|e| format!("Failed to set non-blocking: {}", e))?;
+        self.stream
+            .set_nonblocking(true)
+            .map_err(|e| format!("Failed to set non-blocking: {}", e))?;
 
         while !collected.contains(wait_s) {
             // Check for timeout
@@ -116,7 +123,9 @@ impl Connect {
         }
 
         // Reset to blocking mode
-        self.stream.set_nonblocking(false).map_err(|e| format!("Failed to reset blocking: {}", e))?;
+        self.stream
+            .set_nonblocking(false)
+            .map_err(|e| format!("Failed to reset blocking: {}", e))?;
         Ok(extra_messages)
     }
 
@@ -129,7 +138,9 @@ impl Connect {
         let expected_success = format!("2010 NAME {}", username);
 
         // Set stream to non-blocking mode
-        self.stream.set_nonblocking(true).map_err(|e| format!("Failed to set non-blocking: {}", e))?;
+        self.stream
+            .set_nonblocking(true)
+            .map_err(|e| format!("Failed to set non-blocking: {}", e))?;
 
         while !collected.contains(&expected_success) && login_refusal(&collected).is_none() {
             // Check for timeout
@@ -195,7 +206,9 @@ impl Connect {
         }
 
         // Reset to blocking mode
-        self.stream.set_nonblocking(false).map_err(|e| format!("Failed to reset blocking: {}", e))?;
+        self.stream
+            .set_nonblocking(false)
+            .map_err(|e| format!("Failed to reset blocking: {}", e))?;
         Ok(extra_messages)
     }
 
@@ -207,26 +220,36 @@ impl Connect {
         let mut all_extra_messages = Vec::new();
 
         // Send initial connection byte
-        self.stream.write_all(&[3]).map_err(|e| format!("Failed to send initial byte: {}", e))?;
-        self.stream.flush().map_err(|e| format!("Failed to flush stream: {}", e))?;
+        self.stream
+            .write_all(&[3])
+            .map_err(|e| format!("Failed to send initial byte: {}", e))?;
+        self.stream
+            .flush()
+            .map_err(|e| format!("Failed to flush stream: {}", e))?;
 
         info!("Waiting for username prompt...");
         let mut extra = self.waitfor("Username:")?;
         all_extra_messages.append(&mut extra);
 
         info!("Sending username: {}", username);
-        self.stream.write_all(format!("{}\r\n", username).as_bytes())
+        self.stream
+            .write_all(format!("{}\r\n", username).as_bytes())
             .map_err(|e| format!("Failed to send username: {}", e))?;
-        self.stream.flush().map_err(|e| format!("Failed to flush stream: {}", e))?;
+        self.stream
+            .flush()
+            .map_err(|e| format!("Failed to flush stream: {}", e))?;
 
         info!("Waiting for password prompt...");
         let mut extra = self.waitfor("Password:")?;
         all_extra_messages.append(&mut extra);
 
         info!("Sending password ({} chars)...", password.chars().count());
-        self.stream.write_all(format!("{}\r\n", password).as_bytes())
+        self.stream
+            .write_all(format!("{}\r\n", password).as_bytes())
             .map_err(|e| format!("Failed to send password: {}", e))?;
-        self.stream.flush().map_err(|e| format!("Failed to flush stream: {}", e))?;
+        self.stream
+            .flush()
+            .map_err(|e| format!("Failed to flush stream: {}", e))?;
 
         info!("Waiting for login response...");
         // Wait for either login success (2010 NAME) or login failure
@@ -234,16 +257,22 @@ impl Connect {
         all_extra_messages.extend(login_response);
 
         info!("Joining channel...");
-        self.stream.write_all(format!("{}\r\n", "/join w3").as_bytes())
+        self.stream
+            .write_all(format!("{}\r\n", "/join w3").as_bytes())
             .map_err(|e| format!("Failed to send join command: {}", e))?;
-        self.stream.flush().map_err(|e| format!("Failed to flush stream: {}", e))?;
+        self.stream
+            .flush()
+            .map_err(|e| format!("Failed to flush stream: {}", e))?;
 
         info!("Waiting for join confirmation...");
         let mut extra = self.waitfor("1007")?; // Wait for CHANNEL message confirmation
         all_extra_messages.append(&mut extra);
 
         info!("Connection established successfully!");
-        info!("Collected {} extra messages during connection", all_extra_messages.len());
+        info!(
+            "Collected {} extra messages during connection",
+            all_extra_messages.len()
+        );
         Ok(all_extra_messages)
     }
 

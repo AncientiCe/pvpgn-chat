@@ -65,11 +65,20 @@ impl Session {
 
         thread::Builder::new()
             .name("bnet-reader".into())
-            .spawn(move || read_loop(Cursor::new(pending.into_bytes()).chain(read_stream), on_event))
+            .spawn(move || {
+                read_loop(
+                    Cursor::new(pending.into_bytes()).chain(read_stream),
+                    on_event,
+                )
+            })
             .map_err(|e| format!("Failed to start reader: {e}"))?;
 
         info!("Session established for {}", cred.user);
-        Ok(Session { conn, username: cred.user.clone(), closed: false })
+        Ok(Session {
+            conn,
+            username: cred.user.clone(),
+            closed: false,
+        })
     }
 
     pub fn username(&self) -> &str {
@@ -79,7 +88,9 @@ impl Session {
     /// Send one line (chat text or a `/command`).
     pub fn send(&mut self, line: &str) -> Result<(), String> {
         debug!(">> {line}");
-        self.conn.send(line).map_err(|e| format!("Send failed: {e}"))
+        self.conn
+            .send(line)
+            .map_err(|e| format!("Send failed: {e}"))
     }
 
     /// Log out with `/quit`, then close the socket; the reader thread then

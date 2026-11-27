@@ -31,9 +31,11 @@ fn fake_server(lines: &'static str) -> (String, thread::JoinHandle<Vec<String>>)
         let user = read_line();
         sock.write_all(b"Password: ").unwrap();
         let _pass = read_line();
-        sock.write_all(format!("2010 NAME {user}\r\n").as_bytes()).unwrap();
+        sock.write_all(format!("2010 NAME {user}\r\n").as_bytes())
+            .unwrap();
         assert_eq!(read_line(), "/join w3");
-        sock.write_all(b"1007 CHANNEL \"W3\"\r\n1001 USER Alice 0010 [W3XP]\r\n").unwrap();
+        sock.write_all(b"1007 CHANNEL \"W3\"\r\n1001 USER Alice 0010 [W3XP]\r\n")
+            .unwrap();
 
         // Split mid-line to exercise buffering in the reader.
         let (a, b) = lines.split_at(lines.len() / 2);
@@ -55,7 +57,11 @@ fn logs_in_streams_events_and_reports_disconnect() {
     let (addr, server) = fake_server(
         "1002 JOIN Bob 0000 [W3XP]\r\n1005 TALK Bob 0000 \"hello tester\"\r\n1018 INFO \"W3 topic: be nice\"\r\n",
     );
-    let cred = Credentials { server: addr, user: "tester".into(), password: "pw".into() };
+    let cred = Credentials {
+        server: addr,
+        user: "tester".into(),
+        password: "pw".into(),
+    };
 
     let (tx, rx) = channel();
     let mut session = Session::connect(&cred, move |e| {
@@ -77,13 +83,28 @@ fn logs_in_streams_events_and_reports_disconnect() {
         }
     }
 
-    assert_eq!(server.join().unwrap(), vec!["hi all".to_string(), "/quit".to_string()]);
-    assert_eq!(events.first(), Some(&ServerEvent::Channel { name: "W3".into() }));
-    assert!(events.contains(&ServerEvent::Talk { from: "Bob".into(), text: "hello tester".into() }));
-    assert!(matches!(events.last(), Some(ServerEvent::Disconnected { .. })));
+    assert_eq!(
+        server.join().unwrap(),
+        vec!["hi all".to_string(), "/quit".to_string()]
+    );
+    assert_eq!(
+        events.first(),
+        Some(&ServerEvent::Channel { name: "W3".into() })
+    );
+    assert!(events.contains(&ServerEvent::Talk {
+        from: "Bob".into(),
+        text: "hello tester".into()
+    }));
+    assert!(matches!(
+        events.last(),
+        Some(ServerEvent::Disconnected { .. })
+    ));
     assert_eq!(chat.channel.as_deref(), Some("W3"));
     assert_eq!(chat.topic.as_deref(), Some("be nice"));
     assert_eq!(chat.users.len(), 2);
     assert!(!chat.connected);
-    assert!(chat.messages.iter().any(|m| chat.is_highlight(m)), "mention of our name is highlighted");
+    assert!(
+        chat.messages.iter().any(|m| chat.is_highlight(m)),
+        "mention of our name is highlighted"
+    );
 }

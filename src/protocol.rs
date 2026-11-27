@@ -8,29 +8,66 @@
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ServerEvent {
     /// A user present in the channel (1001), or a flags update (1009).
-    User { name: String, flags: String },
-    Join { name: String, flags: String },
-    Leave { name: String },
+    User {
+        name: String,
+        flags: String,
+    },
+    Join {
+        name: String,
+        flags: String,
+    },
+    Leave {
+        name: String,
+    },
     /// Someone whispered to us.
-    Whisper { from: String, text: String },
+    Whisper {
+        from: String,
+        text: String,
+    },
     /// Echo of a whisper we sent.
-    WhisperSent { to: String, text: String },
-    Talk { from: String, text: String },
-    Emote { from: String, text: String },
-    Broadcast { text: String },
+    WhisperSent {
+        to: String,
+        text: String,
+    },
+    Talk {
+        from: String,
+        text: String,
+    },
+    Emote {
+        from: String,
+        text: String,
+    },
+    Broadcast {
+        text: String,
+    },
     /// We entered a channel; the user list is about to be resent.
-    Channel { name: String },
-    ChannelTopic { channel: String, topic: String },
-    Info { text: String },
-    Error { text: String },
+    Channel {
+        name: String,
+    },
+    ChannelTopic {
+        channel: String,
+        topic: String,
+    },
+    Info {
+        text: String,
+    },
+    Error {
+        text: String,
+    },
     /// Keep-alive from the server; nothing to show.
     Null,
     /// A known code whose arguments could not be parsed.
-    Malformed { line: String },
+    Malformed {
+        line: String,
+    },
     /// A code this client does not handle.
-    Unknown { line: String },
+    Unknown {
+        line: String,
+    },
     /// The connection ended (server closed it or a read failed).
-    Disconnected { reason: String },
+    Disconnected {
+        reason: String,
+    },
 }
 
 /// Remove one pair of surrounding double quotes, if present.
@@ -50,7 +87,9 @@ pub fn parse_line(line: &str) -> ServerEvent {
     let _kind = parts.next();
     let args = parts.next().unwrap_or("");
 
-    let malformed = || ServerEvent::Malformed { line: line.to_string() };
+    let malformed = || ServerEvent::Malformed {
+        line: line.to_string(),
+    };
     // `<name> <flags> [rest]`
     let name_flags_rest = || {
         let mut it = args.splitn(3, ' ');
@@ -72,7 +111,9 @@ pub fn parse_line(line: &str) -> ServerEvent {
             None => malformed(),
         },
         "1003" => match args.split(' ').next() {
-            Some(name) if !name.is_empty() => ServerEvent::Leave { name: name.to_string() },
+            Some(name) if !name.is_empty() => ServerEvent::Leave {
+                name: name.to_string(),
+            },
             _ => malformed(),
         },
         "1004" | "1005" | "1010" | "1023" => match name_flags_rest() {
@@ -87,11 +128,21 @@ pub fn parse_line(line: &str) -> ServerEvent {
             }
             None => malformed(),
         },
-        "1006" => ServerEvent::Broadcast { text: unquote(args) },
-        "1007" => ServerEvent::Channel { name: unquote(args) },
-        "1013" => ServerEvent::Error { text: "Channel is full".into() },
-        "1014" => ServerEvent::Error { text: "Channel does not exist".into() },
-        "1015" => ServerEvent::Error { text: "Channel is restricted".into() },
+        "1006" => ServerEvent::Broadcast {
+            text: unquote(args),
+        },
+        "1007" => ServerEvent::Channel {
+            name: unquote(args),
+        },
+        "1013" => ServerEvent::Error {
+            text: "Channel is full".into(),
+        },
+        "1014" => ServerEvent::Error {
+            text: "Channel does not exist".into(),
+        },
+        "1015" => ServerEvent::Error {
+            text: "Channel is restricted".into(),
+        },
         "1018" => {
             let text = unquote(args);
             // e.g. `W3 topic: You can now .pub and .gopub from channel`
@@ -103,9 +154,13 @@ pub fn parse_line(line: &str) -> ServerEvent {
                 None => ServerEvent::Info { text },
             }
         }
-        "1019" => ServerEvent::Error { text: unquote(args) },
+        "1019" => ServerEvent::Error {
+            text: unquote(args),
+        },
         "2000" => ServerEvent::Null,
-        _ => ServerEvent::Unknown { line: line.to_string() },
+        _ => ServerEvent::Unknown {
+            line: line.to_string(),
+        },
     }
 }
 
@@ -117,11 +172,17 @@ mod tests {
     fn parses_user_with_flags_and_tag() {
         assert_eq!(
             parse_line("1001 USER Bob 0010 [W3XP]"),
-            ServerEvent::User { name: "Bob".into(), flags: "0010".into() }
+            ServerEvent::User {
+                name: "Bob".into(),
+                flags: "0010".into()
+            }
         );
         assert_eq!(
             parse_line("1009 USER Bob 0002"),
-            ServerEvent::User { name: "Bob".into(), flags: "0002".into() }
+            ServerEvent::User {
+                name: "Bob".into(),
+                flags: "0002".into()
+            }
         );
     }
 
@@ -129,7 +190,10 @@ mod tests {
     fn parses_talk_and_strips_flags_and_quotes() {
         assert_eq!(
             parse_line("1005 TALK Bob 0000 \"hello \"there\"\""),
-            ServerEvent::Talk { from: "Bob".into(), text: "hello \"there\"".into() }
+            ServerEvent::Talk {
+                from: "Bob".into(),
+                text: "hello \"there\"".into()
+            }
         );
     }
 
@@ -137,15 +201,24 @@ mod tests {
     fn parses_whispers_and_emote() {
         assert_eq!(
             parse_line("1004 WHISPER Bob 0000 \"psst\""),
-            ServerEvent::Whisper { from: "Bob".into(), text: "psst".into() }
+            ServerEvent::Whisper {
+                from: "Bob".into(),
+                text: "psst".into()
+            }
         );
         assert_eq!(
             parse_line("1010 WHISPER Bob 0000 \"hi\""),
-            ServerEvent::WhisperSent { to: "Bob".into(), text: "hi".into() }
+            ServerEvent::WhisperSent {
+                to: "Bob".into(),
+                text: "hi".into()
+            }
         );
         assert_eq!(
             parse_line("1023 EMOTE Bob 0000 \"waves\""),
-            ServerEvent::Emote { from: "Bob".into(), text: "waves".into() }
+            ServerEvent::Emote {
+                from: "Bob".into(),
+                text: "waves".into()
+            }
         );
     }
 
@@ -153,20 +226,37 @@ mod tests {
     fn parses_topic_and_plain_info() {
         assert_eq!(
             parse_line("1018 INFO \"W3 topic: no need for whisper\""),
-            ServerEvent::ChannelTopic { channel: "W3".into(), topic: "no need for whisper".into() }
+            ServerEvent::ChannelTopic {
+                channel: "W3".into(),
+                topic: "no need for whisper".into()
+            }
         );
-        assert_eq!(parse_line("1018 INFO \"hello\""), ServerEvent::Info { text: "hello".into() });
+        assert_eq!(
+            parse_line("1018 INFO \"hello\""),
+            ServerEvent::Info {
+                text: "hello".into()
+            }
+        );
     }
 
     #[test]
     fn parses_channel_name() {
-        assert_eq!(parse_line("1007 CHANNEL \"W3\""), ServerEvent::Channel { name: "W3".into() });
+        assert_eq!(
+            parse_line("1007 CHANNEL \"W3\""),
+            ServerEvent::Channel { name: "W3".into() }
+        );
     }
 
     #[test]
     fn missing_args_are_malformed_not_panics() {
-        assert!(matches!(parse_line("1002 JOIN"), ServerEvent::Malformed { .. }));
-        assert!(matches!(parse_line("1004 WHISPER Bob"), ServerEvent::Malformed { .. }));
+        assert!(matches!(
+            parse_line("1002 JOIN"),
+            ServerEvent::Malformed { .. }
+        ));
+        assert!(matches!(
+            parse_line("1004 WHISPER Bob"),
+            ServerEvent::Malformed { .. }
+        ));
         assert!(matches!(parse_line(""), ServerEvent::Unknown { .. }));
         assert_eq!(parse_line("2000 NULL"), ServerEvent::Null);
     }

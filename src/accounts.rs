@@ -20,7 +20,10 @@ pub const KNOWN_SERVERS: &[(&str, &str)] = &[("Eurobattle.net", "116.203.95.137:
 
 /// The friendly name of a known server address, if it is one.
 pub fn server_name(address: &str) -> Option<&'static str> {
-    KNOWN_SERVERS.iter().find(|(_, a)| *a == address).map(|(name, _)| *name)
+    KNOWN_SERVERS
+        .iter()
+        .find(|(_, a)| *a == address)
+        .map(|(name, _)| *name)
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -36,7 +39,11 @@ impl SavedAccount {
     }
 
     pub fn label(&self) -> String {
-        format!("{}  ·  {}", self.user, server_name(&self.server).unwrap_or(&self.server))
+        format!(
+            "{}  ·  {}",
+            self.user,
+            server_name(&self.server).unwrap_or(&self.server)
+        )
     }
 }
 
@@ -52,7 +59,10 @@ pub struct OsSecretStore;
 
 impl SecretStore for OsSecretStore {
     fn get(&self, key: &str) -> Option<String> {
-        keyring::Entry::new(KEYRING_SERVICE, key).ok()?.get_password().ok()
+        keyring::Entry::new(KEYRING_SERVICE, key)
+            .ok()?
+            .get_password()
+            .ok()
     }
 
     fn set(&self, key: &str, secret: &str) -> Result<(), String> {
@@ -76,7 +86,10 @@ pub struct AccountStore<S: SecretStore = OsSecretStore> {
 impl AccountStore<OsSecretStore> {
     /// The store in the working directory, backed by the OS credential store.
     pub fn open() -> Self {
-        let store = Self { dir: PathBuf::from("."), secrets: OsSecretStore };
+        let store = Self {
+            dir: PathBuf::from("."),
+            secrets: OsSecretStore,
+        };
         store.migrate_legacy();
         store
     }
@@ -84,7 +97,10 @@ impl AccountStore<OsSecretStore> {
 
 impl<S: SecretStore> AccountStore<S> {
     pub fn with(dir: impl Into<PathBuf>, secrets: S) -> Self {
-        Self { dir: dir.into(), secrets }
+        Self {
+            dir: dir.into(),
+            secrets,
+        }
     }
 
     /// Saved accounts, most recently used first.
@@ -98,13 +114,20 @@ impl<S: SecretStore> AccountStore<S> {
     /// Full login for a saved account, if its password is in the store.
     pub fn credentials(&self, account: &SavedAccount) -> Option<Credentials> {
         let password = self.secrets.get(&account.key())?;
-        Some(Credentials { server: account.server.clone(), user: account.user.clone(), password })
+        Some(Credentials {
+            server: account.server.clone(),
+            user: account.user.clone(),
+            password,
+        })
     }
 
     /// Remember a login that just worked: password into the credential
     /// store, account to the front of the list.
     pub fn remember(&self, cred: &Credentials) -> Result<(), String> {
-        let account = SavedAccount { server: cred.server.clone(), user: cred.user.clone() };
+        let account = SavedAccount {
+            server: cred.server.clone(),
+            user: cred.user.clone(),
+        };
         self.secrets.set(&account.key(), &cred.password)?;
         let mut accounts = self.accounts();
         accounts.retain(|a| a.key() != account.key());
@@ -121,24 +144,39 @@ impl<S: SecretStore> AccountStore<S> {
 
     fn write(&self, accounts: &[SavedAccount]) -> Result<(), String> {
         let json = serde_json::to_string_pretty(accounts).map_err(|e| e.to_string())?;
-        std::fs::write(self.dir.join(ACCOUNTS_FILE), json).map_err(|e| format!("Could not save accounts: {e}"))
+        std::fs::write(self.dir.join(ACCOUNTS_FILE), json)
+            .map_err(|e| format!("Could not save accounts: {e}"))
     }
 
     /// Move a plain-text `credentials.json` from older versions into the
     /// store, then delete it so the password is no longer on disk.
     fn migrate_legacy(&self) {
         let path = self.dir.join(LEGACY_CREDENTIALS_FILE);
-        let Ok(text) = std::fs::read_to_string(&path) else { return };
-        let Ok(cred) = serde_json::from_str::<Credentials>(&text) else { return };
+        let Ok(text) = std::fs::read_to_string(&path) else {
+            return;
+        };
+        let Ok(cred) = serde_json::from_str::<Credentials>(&text) else {
+            return;
+        };
         if cred.server.is_empty() || cred.user.is_empty() {
             return;
         }
-        let already_saved = self.accounts().iter().any(|a| a.user.eq_ignore_ascii_case(&cred.user) && a.server == cred.server);
-        let result = if already_saved { Ok(()) } else { self.remember(&cred) };
+        let already_saved = self
+            .accounts()
+            .iter()
+            .any(|a| a.user.eq_ignore_ascii_case(&cred.user) && a.server == cred.server);
+        let result = if already_saved {
+            Ok(())
+        } else {
+            self.remember(&cred)
+        };
         match result {
             Ok(()) => {
                 if std::fs::remove_file(&path).is_ok() {
-                    info!("Moved saved login for {} into the credential store", cred.user);
+                    info!(
+                        "Moved saved login for {} into the credential store",
+                        cred.user
+                    );
                 }
             }
             Err(e) => warn!("Could not migrate {LEGACY_CREDENTIALS_FILE}: {e}"),
@@ -176,7 +214,11 @@ mod tests {
     }
 
     fn cred(user: &str, pw: &str) -> Credentials {
-        Credentials { server: "host:6112".into(), user: user.into(), password: pw.into() }
+        Credentials {
+            server: "host:6112".into(),
+            user: user.into(),
+            password: pw.into(),
+        }
     }
 
     #[test]
@@ -189,16 +231,28 @@ mod tests {
 
         let users: Vec<_> = store.accounts().into_iter().map(|a| a.user).collect();
         assert_eq!(users, vec!["ann", "Bob"]);
-        assert_eq!(store.credentials(&store.accounts()[0]).unwrap().password, "pw3");
+        assert_eq!(
+            store.credentials(&store.accounts()[0]).unwrap().password,
+            "pw3"
+        );
 
         let file = std::fs::read_to_string(dir.join(ACCOUNTS_FILE)).unwrap();
-        assert!(!file.contains("pw"), "passwords must not be written to accounts.json");
+        assert!(
+            !file.contains("pw"),
+            "passwords must not be written to accounts.json"
+        );
     }
 
     #[test]
     fn labels_use_known_server_names() {
-        let known = SavedAccount { server: "116.203.95.137:6112".into(), user: "Ann".into() };
-        let other = SavedAccount { server: "10.0.0.1:6112".into(), user: "Bob".into() };
+        let known = SavedAccount {
+            server: "116.203.95.137:6112".into(),
+            user: "Ann".into(),
+        };
+        let other = SavedAccount {
+            server: "10.0.0.1:6112".into(),
+            user: "Bob".into(),
+        };
         assert_eq!(known.label(), "Ann  ·  Eurobattle.net");
         assert_eq!(other.label(), "Bob  ·  10.0.0.1:6112");
     }
@@ -225,7 +279,10 @@ mod tests {
         let store = AccountStore::with(&dir, MemorySecrets::default());
         store.migrate_legacy();
         assert_eq!(store.accounts()[0].user, "Old");
-        assert_eq!(store.credentials(&store.accounts()[0]).unwrap().password, "secret");
+        assert_eq!(
+            store.credentials(&store.accounts()[0]).unwrap().password,
+            "secret"
+        );
         assert!(!dir.join(LEGACY_CREDENTIALS_FILE).exists());
     }
 }
