@@ -1,6 +1,6 @@
 use eframe::egui::{self, Color32, TextEdit, Button};
 use serde::{Deserialize, Serialize};
-use crate::Credentials;
+use bnetchat::session::Credentials;
 use std::net::{SocketAddr, TcpStream};
 use std::time::Duration;
 
@@ -43,10 +43,11 @@ impl Default for Login {
         if let Ok(text) = std::fs::read_to_string("credentials.json") {
 
                 // Parse the string into a dynamically-typed JSON structure.
-            let credentials = serde_json::from_str::<Credentials>(&text).unwrap();
-            login.user.push_str(&credentials.user);
-            login.server.push_str(&credentials.server);
-            login.password.push_str(&credentials.password);
+            if let Ok(credentials) = serde_json::from_str::<Credentials>(&text) {
+                login.user.push_str(&credentials.user);
+                login.server.push_str(&credentials.server);
+                login.password.push_str(&credentials.password);
+            }
         };
 
         login

@@ -2,3 +2,4 @@
 .idea
 .env
 credentials.json
+.impact/

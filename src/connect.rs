@@ -6,12 +6,29 @@ use tracing::{info, debug};
 #[derive(Debug)]
 pub struct Connect {
     stream: TcpStream,
+    /// Bytes read during login that end in an incomplete line.
+    pending: String,
+}
+
+/// Split off a trailing incomplete line, unless it is the prompt we waited for
+/// (prompts like `Username: ` have no line ending).
+fn split_partial(collected: &str, wait_s: &str) -> (String, String) {
+    if collected.ends_with("\r\n") {
+        return (collected.to_string(), String::new());
+    }
+    let cut = collected.rfind("\r\n").map(|i| i + 2).unwrap_or(0);
+    let tail = &collected[cut..];
+    if tail.contains(wait_s) {
+        (collected.to_string(), String::new())
+    } else {
+        (collected[..cut].to_string(), tail.to_string())
+    }
 }
 
 impl Connect {
-    pub(crate) fn new(stream: TcpStream) -> Connect {
-        stream.set_nodelay(true).unwrap();
-        Connect {stream}
+    pub fn new(stream: TcpStream) -> Connect {
+        let _ = stream.set_nodelay(true);
+        Connect { stream, pending: String::new() }
     }
 
     fn waitfor(&mut self, wait_s: &str) -> Result<Vec<String>, String> {
@@ -61,7 +78,9 @@ impl Connect {
         }
 
         // Parse the collected data and extract any extra messages beyond what we were waiting for
-        let lines: Vec<&str> = collected.split("\r\n").collect();
+        let (complete, partial) = split_partial(&collected, wait_s);
+        self.pending = partial;
+        let lines: Vec<&str> = complete.split("\r\n").collect();
         let mut found_target = false;
 
         for line in lines {
@@ -69,8 +88,13 @@ impl Connect {
                 continue;
             }
 
-            if line.contains(wait_s) {
+            if line.contains(wait_s) && !found_target {
                 found_target = true;
+                // Keep protocol lines we waited for (e.g. `1007 CHANNEL "W3"`)
+                // so the caller still sees them; drop plain prompts like `Username:`.
+                if line.starts_with(|c: char| c.is_ascii_digit()) {
+                    extra_messages.push(line.to_string());
+                }
                 continue;
             }
 
@@ -139,7 +163,9 @@ impl Connect {
         }
 
         // Parse the collected data and extract any extra messages beyond the login success
-        let lines: Vec<&str> = collected.split("\r\n").collect();
+        let (complete, partial) = split_partial(&collected, &expected_success);
+        self.pending = partial;
+        let lines: Vec<&str> = complete.split("\r\n").collect();
         let mut found_login_success = false;
 
         for line in lines {
@@ -163,7 +189,7 @@ impl Connect {
         Ok(extra_messages)
     }
 
-    pub(crate) fn connect(&mut self, username: &str, password: &str) -> Result<Vec<String>, String> {
+    pub fn connect(&mut self, username: &str, password: &str) -> Result<Vec<String>, String> {
         if username.is_empty() || password.is_empty() {
             return Err("Username and password cannot be empty".to_string());
         }
@@ -211,10 +237,15 @@ impl Connect {
         Ok(all_extra_messages)
     }
 
-    pub fn send(&mut self, msg: String) {
-        // println!("Sending: {}", msg);
-        self.stream.write_all(format!("{}\r\n", msg).as_bytes()).unwrap();
-        self.stream.flush().unwrap();
+    pub fn send(&mut self, msg: &str) -> std::io::Result<()> {
+        self.stream.write_all(format!("{}\r\n", msg).as_bytes())?;
+        self.stream.flush()
+    }
+
+    /// Take the incomplete trailing line left over from login; the reader
+    /// must see these bytes before anything else from the socket.
+    pub fn take_pending(&mut self) -> String {
+        std::mem::take(&mut self.pending)
     }
 
     pub fn get_stream_clone(&self) -> Result<TcpStream, std::io::Error> {
