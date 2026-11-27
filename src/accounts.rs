@@ -15,6 +15,14 @@ const ACCOUNTS_FILE: &str = "accounts.json";
 const LEGACY_CREDENTIALS_FILE: &str = "credentials.json";
 const KEYRING_SERVICE: &str = "bnetchat";
 
+/// Servers offered by name in the login form (name, `host:port`).
+pub const KNOWN_SERVERS: &[(&str, &str)] = &[("Eurobattle.net", "116.203.95.137:6112")];
+
+/// The friendly name of a known server address, if it is one.
+pub fn server_name(address: &str) -> Option<&'static str> {
+    KNOWN_SERVERS.iter().find(|(_, a)| *a == address).map(|(name, _)| *name)
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct SavedAccount {
     pub server: String,
@@ -28,7 +36,7 @@ impl SavedAccount {
     }
 
     pub fn label(&self) -> String {
-        format!("{}  ·  {}", self.user, self.server)
+        format!("{}  ·  {}", self.user, server_name(&self.server).unwrap_or(&self.server))
     }
 }
 
@@ -185,6 +193,14 @@ mod tests {
 
         let file = std::fs::read_to_string(dir.join(ACCOUNTS_FILE)).unwrap();
         assert!(!file.contains("pw"), "passwords must not be written to accounts.json");
+    }
+
+    #[test]
+    fn labels_use_known_server_names() {
+        let known = SavedAccount { server: "116.203.95.137:6112".into(), user: "Ann".into() };
+        let other = SavedAccount { server: "10.0.0.1:6112".into(), user: "Bob".into() };
+        assert_eq!(known.label(), "Ann  ·  Eurobattle.net");
+        assert_eq!(other.label(), "Bob  ·  10.0.0.1:6112");
     }
 
     #[test]
