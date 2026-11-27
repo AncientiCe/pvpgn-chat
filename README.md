@@ -19,6 +19,11 @@ A second front end built on [GPUI](https://www.gpui.rs/) (Zed's UI framework) wi
 [gpui-kit](https://crates.io/crates/gpui-kit) components. Both apps share the
 protocol, session and chat state in `src/lib.rs`; only the UI differs.
 
+![GPUI client demo](demo-gpui.gif)
+
+Saved accounts keep their passwords in the OS credential store (Windows Credential
+Manager, macOS Keychain, Linux keyring); `accounts.json` only lists server and username.
+
 
 - [x] Fixed scrolling
 - [x] Added unsafe to char reading from tcpstream

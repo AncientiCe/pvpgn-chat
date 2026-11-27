@@ -77,6 +77,8 @@ pub struct LoginView {
     user: Entity<InputState>,
     password: Entity<InputState>,
     error: Option<String>,
+    /// Focused on the saved-accounts screen so Enter logs in.
+    focus: FocusHandle,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -136,10 +138,13 @@ impl LoginView {
             user,
             password,
             error,
+            focus: cx.focus_handle(),
             _subscriptions,
         };
         if view.show_form {
             view.open_form(None, window, cx);
+        } else {
+            view.focus.focus(window, cx);
         }
         view
     }
@@ -309,9 +314,10 @@ impl LoginView {
                         .ghost()
                         .small()
                         .label("Back to saved accounts")
-                        .on_click(cx.listener(|this, _, _, cx| {
+                        .on_click(cx.listener(|this, _, window, cx| {
                             this.show_form = false;
                             this.error = None;
+                            this.focus.focus(window, cx);
                             cx.notify();
                         })),
                 )
@@ -358,6 +364,19 @@ impl Render for LoginView {
             card.child(self.render_picker(cx).into_any_element())
         };
 
-        div().size_full().flex().items_center().justify_center().child(card)
+        div()
+            .size_full()
+            .flex()
+            .items_center()
+            .justify_center()
+            .track_focus(&self.focus)
+            // Enter on the saved-accounts screen logs in. Only when this view
+            // itself has focus, so Enter inside the open dropdown still picks.
+            .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
+                if !this.show_form && event.keystroke.key == "enter" && this.focus.is_focused(window) {
+                    this.login_selected(window, cx);
+                }
+            }))
+            .child(card)
     }
 }
