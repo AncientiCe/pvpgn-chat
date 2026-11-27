@@ -8,6 +8,7 @@ use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{Input, InputEvent, InputState};
 use gpui_kit::component::menu::{ContextMenuExt as _, PopupMenuItem};
 use gpui_kit::component::message_scroller::{MessageScroller, MessageScrollerState};
+use gpui_kit::component::text::TextView;
 use gpui_kit::component::{ActiveTheme as _, IconName, Sizable as _, StyledExt as _};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
@@ -405,13 +406,14 @@ impl ChatView {
             })
     }
 
-    fn quote(&mut self, msg: ChatMessage, reply: bool, window: &mut Window, cx: &mut Context<Self>) {
-        if reply {
-            if let Some(author) = &msg.author {
-                self.set_input(format!("@{author} "), window, cx);
-            }
+    /// Reply or quote. Whispers are answered with a plain `/w name ` (WC3 has
+    /// no @-mentions); channel lines get a quote above the composer.
+    fn quote(&mut self, msg: ChatMessage, window: &mut Window, cx: &mut Context<Self>) {
+        match chat::reply_prefix(&msg) {
+            Some(prefix) => self.set_input(prefix, window, cx),
+            None => self.quoted = Some(msg),
         }
-        self.quoted = Some(msg);
+        self.input.update(cx, |input, cx| input.focus(window, cx));
         cx.notify();
     }
 }
@@ -449,6 +451,24 @@ fn status_line(connected: bool, cx: &App) -> impl IntoElement {
         .text_color(theme.muted_foreground)
         .child(div().size(px(8.)).rounded_full().bg(color))
         .child(text)
+}
+
+/// Chat text the user can select with the mouse and copy (Ctrl+C).
+///
+/// TextView renders Markdown, so escape it: chat lines are shown literally.
+fn selectable_text(index: usize, text: &str) -> TextView {
+    TextView::markdown(("msg-text", index), escape_markdown(text)).selectable(true)
+}
+
+fn escape_markdown(text: &str) -> String {
+    let mut out = String::with_capacity(text.len() + 8);
+    for c in text.chars() {
+        if matches!(c, '\\' | '`' | '*' | '_' | '[' | ']' | '<' | '>' | '#' | '|' | '~' | '-' | '+' | '.' | '!') {
+            out.push('\\');
+        }
+        out.push(c);
+    }
+    out
 }
 
 /// Whether `msg` continues a group started by `prev` (same author, close in time).
@@ -491,7 +511,7 @@ fn render_message(
             if continues_group(msg, prev) {
                 row.py_0p5()
                     .child(div().w(px(48.)).flex_shrink_0().text_xs().text_color(theme.transparent).child(time))
-                    .child(div().flex_1().min_w_0().child(msg.text.clone()))
+                    .child(div().flex_1().min_w_0().child(selectable_text(index, &msg.text)))
             } else {
                 let name_color = if msg.kind == MessageKind::Own { theme.primary } else { theme.foreground };
                 row.pt_3()
@@ -511,7 +531,7 @@ fn render_message(
                                     .child(div().font_semibold().text_color(name_color).child(author))
                                     .child(div().text_xs().text_color(theme.muted_foreground).child(time)),
                             )
-                            .child(msg.text.clone()),
+                            .child(selectable_text(index, &msg.text)),
                     )
             }
         }
@@ -532,7 +552,7 @@ fn render_message(
                         .min_w_0()
                         .text_color(if kind == MessageKind::Emote { theme.foreground } else { color })
                         .when(kind == MessageKind::Emote, |el| el.italic())
-                        .child(msg.display_text()),
+                        .child(selectable_text(index, &msg.display_text())),
                 )
                 .child(div().text_xs().text_color(theme.muted_foreground).child(time))
         }
@@ -543,10 +563,10 @@ fn render_message(
         let (v1, v2, m1, m2) = (view.clone(), view.clone(), msg.clone(), msg.clone());
         let text = msg.display_text();
         menu.item(PopupMenuItem::new("Reply").on_click(move |_, window, cx| {
-            let _ = v1.update(cx, |this, cx| this.quote(m1.clone(), true, window, cx));
+            let _ = v1.update(cx, |this, cx| this.quote(m1.clone(), window, cx));
         }))
         .item(PopupMenuItem::new("Quote").on_click(move |_, window, cx| {
-            let _ = v2.update(cx, |this, cx| this.quote(m2.clone(), false, window, cx));
+            let _ = v2.update(cx, |this, cx| this.quote(m2.clone(), window, cx));
         }))
         .separator()
         .item(PopupMenuItem::new("Copy text").on_click(move |_, _, cx| {

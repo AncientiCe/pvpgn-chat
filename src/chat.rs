@@ -32,6 +32,9 @@ pub struct ChatMessage {
     pub text: String,
     /// Unix seconds.
     pub timestamp: u64,
+    /// For whispers: the other person (sender of an incoming whisper,
+    /// recipient of one we sent). Replies go back to them with `/w`.
+    pub peer: Option<String>,
 }
 
 impl ChatMessage {
@@ -40,6 +43,11 @@ impl ChatMessage {
         match (&self.kind, &self.author) {
             (MessageKind::Talk | MessageKind::Own, Some(a)) => format!("{a}: {}", self.text),
             (MessageKind::Emote, Some(a)) => format!("{a} {}", self.text),
+            (MessageKind::Whisper, _) => match (&self.peer, &self.author) {
+                (Some(peer), Some(a)) if a == peer => format!("{peer} whispers: {}", self.text),
+                (Some(peer), _) => format!("You whisper to {peer}: {}", self.text),
+                _ => self.text.clone(),
+            },
             _ => self.text.clone(),
         }
     }
@@ -118,10 +126,18 @@ impl ChatState {
             author: author.map(str::to_string),
             text: text.into(),
             timestamp: now_secs(),
+            peer: None,
         });
         while self.messages.len() > self.max_messages {
             self.messages.pop_front();
             self.dropped += 1;
+        }
+    }
+
+    fn push_whisper(&mut self, author: &str, peer: &str, text: String) {
+        self.push(MessageKind::Whisper, Some(author), text);
+        if let Some(last) = self.messages.back_mut() {
+            last.peer = Some(peer.to_string());
         }
     }
 
@@ -165,12 +181,12 @@ impl ChatState {
             }
             ServerEvent::Whisper { from, text } => {
                 if !self.ignored.contains(&from) {
-                    self.push(MessageKind::Whisper, Some(&from), format!("{from} whispers: {text}"));
+                    self.push_whisper(&from.clone(), &from, text);
                 }
             }
             ServerEvent::WhisperSent { to, text } => {
                 let me = self.me.clone();
-                self.push(MessageKind::Whisper, Some(&me), format!("You whisper to {to}: {text}"));
+                self.push_whisper(&me, &to, text);
             }
             ServerEvent::Broadcast { text } => self.push(MessageKind::System, None, format!("Broadcast: {text}")),
             ServerEvent::Channel { name } => {
@@ -230,17 +246,44 @@ impl ChatState {
     }
 }
 
-/// Text to send for `input`, prefixed with a quote of `quoted` if any.
+/// What to prefill the input with to reply to `msg`: `/w name ` for a
+/// whisper (WC3 has no @-mentions), nothing for channel lines.
+pub fn reply_prefix(msg: &ChatMessage) -> Option<String> {
+    msg.peer.as_ref().map(|peer| format!("/w {peer} "))
+}
+
+/// Text to send for `input`, with a quote of `quoted` if any.
+///
+/// Quoting a whisper sends exactly `/w name <input>` back to that person
+/// (no quote text, so bot commands like `.map` still work). Quoting a
+/// channel line prefixes a short quote and sends it to the channel.
 pub fn compose_outgoing(input: &str, quoted: Option<&ChatMessage>) -> String {
-    match quoted {
-        Some(q) => format!(
-            "[Quote {}] {}: {}",
-            format_time(q.timestamp),
-            q.author.as_deref().unwrap_or("Unknown"),
+    let Some(q) = quoted else { return input.to_string() };
+
+    if let Some(peer) = &q.peer {
+        // Don't double the command if the input already starts with it.
+        let prefix = format!("/w {peer} ");
+        let rest = if input.to_lowercase().starts_with(&prefix.to_lowercase()) {
+            &input[prefix.len()..]
+        } else {
             input
-        ),
-        None => input.to_string(),
+        };
+        return format!("{prefix}{rest}");
     }
+
+    const MAX_QUOTE: usize = 60;
+    let mut excerpt: String = q.text.chars().take(MAX_QUOTE).collect();
+    if q.text.chars().count() > MAX_QUOTE {
+        excerpt.push_str("...");
+    }
+    let quote = format!(
+        "[{} {}: \"{}\"]",
+        q.author.as_deref().unwrap_or("?"),
+        format_time(q.timestamp),
+        excerpt
+    );
+
+    format!("{quote} {input}")
 }
 
 /// `HH:MM` (UTC) for a Unix timestamp.
@@ -314,12 +357,28 @@ mod tests {
     }
 
     #[test]
+    fn whispers_reply_and_quote_with_w_command() {
+        let mut s = ChatState::new("me");
+        feed(&mut s, &["1004 WHISPER Bob 0000 \"want to scrim?\"", "1010 WHISPER Ann 0000 \"hi\""]);
+        let incoming = &s.messages[0];
+        let outgoing = &s.messages[1];
+        assert_eq!(incoming.display_text(), "Bob whispers: want to scrim?");
+        assert_eq!(outgoing.display_text(), "You whisper to Ann: hi");
+        assert_eq!(reply_prefix(incoming).as_deref(), Some("/w Bob "));
+        assert_eq!(reply_prefix(outgoing).as_deref(), Some("/w Ann "));
+        assert_eq!(compose_outgoing(".map footmen", Some(incoming)), "/w Bob .map footmen");
+        // Typing the /w yourself does not double it.
+        assert_eq!(compose_outgoing("/w Bob sure", Some(incoming)), "/w Bob sure");
+    }
+
+    #[test]
     fn helpers() {
         assert_eq!(format_time(3600 * 13 + 60 * 7), "13:07");
         assert_eq!(initials("bob"), "B");
         assert_eq!(initials("big bob"), "BB");
         assert_eq!(initials(""), "?");
-        let q = ChatMessage { kind: MessageKind::Talk, author: Some("Ann".into()), text: "x".into(), timestamp: 0 };
-        assert_eq!(compose_outgoing("ok", Some(&q)), "[Quote 00:00] Ann: ok");
+        let q = ChatMessage { kind: MessageKind::Talk, author: Some("Ann".into()), text: "x".into(), timestamp: 0, peer: None };
+        assert_eq!(compose_outgoing("ok", Some(&q)), "[Ann 00:00: \"x\"] ok");
+        assert_eq!(reply_prefix(&q), None);
     }
 }

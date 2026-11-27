@@ -135,12 +135,21 @@ impl ChatView {
             Action::ToggleFriend(user) => self.chat.toggle_friend(&user),
             Action::Unignore(user) => self.chat.set_ignored(&user, false),
             Action::Confirm(c) => self.pending_confirmation = Some(c),
-            Action::Quote(msg) => self.quoted = Some(msg),
+            // Whispers are answered with `/w name`; channel lines are quoted
+            // (WC3 has no @-mentions).
             Action::Reply(msg) => {
-                if let Some(author) = &msg.author {
-                    self.input = format!("@{author} ");
+                match chat::reply_prefix(&msg) {
+                    Some(prefix) => self.input = prefix,
+                    None => self.quoted = Some(msg),
                 }
-                self.quoted = Some(msg);
+                ctx.memory_mut(|m| m.request_focus(input_id));
+            }
+            // Quoting a whisper is the same as replying: plain `/w name`.
+            Action::Quote(msg) => {
+                match chat::reply_prefix(&msg) {
+                    Some(prefix) => self.input = prefix,
+                    None => self.quoted = Some(msg),
+                }
                 ctx.memory_mut(|m| m.request_focus(input_id));
             }
         }
