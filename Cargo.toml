@@ -12,6 +12,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 serde = { version = "1.0", features = ["derive"] }
 eframe = "0.31.1"
 serde_json = "1.0.92"
+keyring = { version = "3.6.3", features = ["windows-native", "apple-native", "linux-native"] }
 
 [workspace]
 members = [".", "gpui-app"]

@@ -19,27 +19,6 @@ pub struct Credentials {
     pub password: String,
 }
 
-/// File the last successful login is remembered in (next to the working dir).
-const CREDENTIALS_FILE: &str = "credentials.json";
-
-impl Credentials {
-    /// The last login that worked, if any.
-    pub fn load() -> Option<Credentials> {
-        let text = std::fs::read_to_string(CREDENTIALS_FILE).ok()?;
-        serde_json::from_str(&text).ok()
-    }
-
-    /// Remember this login. Call only after it succeeded, so a typo never
-    /// replaces a working saved password.
-    pub fn save(&self) {
-        if let Ok(json) = serde_json::to_string_pretty(self) {
-            if let Err(e) = std::fs::write(CREDENTIALS_FILE, json) {
-                warn!("Could not save credentials: {e}");
-            }
-        }
-    }
-}
-
 #[derive(Debug)]
 pub struct Session {
     conn: Connect,

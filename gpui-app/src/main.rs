@@ -57,7 +57,9 @@ impl BnetApp {
                 let _ = tx.try_send(event);
             });
             if session.is_ok() {
-                cred.save();
+                if let Err(e) = bnetchat::accounts::AccountStore::open().remember(&cred) {
+                    log::warn!("{e}");
+                }
             }
             session
         });

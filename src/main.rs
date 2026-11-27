@@ -8,6 +8,7 @@ use std::sync::mpsc::{channel, Receiver};
 use std::thread;
 
 use bnetchat::protocol::ServerEvent;
+use bnetchat::accounts::AccountStore;
 use bnetchat::session::{Credentials, Session};
 use eframe::egui;
 use tracing::{error, info};
@@ -102,7 +103,9 @@ impl App {
                 wake.request_repaint();
             })
             .map(|session| {
-                cred.save();
+                if let Err(e) = AccountStore::open().remember(&cred) {
+                    tracing::warn!("{e}");
+                }
                 (session, event_rx)
             });
             let _ = result_tx.send(result);

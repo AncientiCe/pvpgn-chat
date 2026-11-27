@@ -2,6 +2,7 @@
 //! connection/session, and the chat state. The egui app (`src/main.rs`) and
 //! the GPUI prototype (`gpui-app/`) are both built on this.
 
+pub mod accounts;
 pub mod chat;
 pub mod connect;
 pub mod protocol;

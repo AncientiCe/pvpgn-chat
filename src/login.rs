@@ -1,6 +1,6 @@
 use eframe::egui::{self, Color32, TextEdit, Button};
 use serde::{Deserialize, Serialize};
-use bnetchat::session::Credentials;
+use bnetchat::accounts::AccountStore;
 use std::net::{SocketAddr, TcpStream};
 use std::time::Duration;
 
@@ -40,7 +40,9 @@ impl Default for Login {
             user_error: None,
             password_error: None,
         };
-        if let Some(credentials) = Credentials::load() {
+        // Prefill the most recently used saved account.
+        let store = AccountStore::open();
+        if let Some(credentials) = store.accounts().first().and_then(|a| store.credentials(a)) {
             login.user = credentials.user;
             login.server = credentials.server;
             login.password = credentials.password;
