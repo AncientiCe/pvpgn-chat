@@ -1,5 +1,9 @@
 # pvpgn-chat
 
+[![CI](https://github.com/AncientiCe/pvpgn-chat/actions/workflows/ci.yml/badge.svg)](https://github.com/AncientiCe/pvpgn-chat/actions/workflows/ci.yml)
+[![Audit](https://github.com/AncientiCe/pvpgn-chat/actions/workflows/audit.yml/badge.svg)](https://github.com/AncientiCe/pvpgn-chat/actions/workflows/audit.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 A native desktop chat client for [PvPGN](https://github.com/pvpgn/pvpgn-server) servers
 (Warcraft III / Battle.net emulators such as Eurobattle.net), written in Rust.
 
@@ -27,21 +31,34 @@ chat window: live channel messages, whispers, the member list, and saved logins.
   server frees the account right away.
 - **Dark and light themes**.
 - **Fast and light**: GPU-rendered UI built on [GPUI](https://www.gpui.rs/), the framework behind
-  the Zed editor (and the one Discord chose for its native client).
+  the Zed editor (and the one Discord chose for its native client), with
+  [gpui-kit](https://crates.io/crates/gpui-kit) components.
 
-## Getting started
+## Download
+
+Get the latest build for Windows, macOS (Apple silicon) or Linux from
+[Releases](https://github.com/AncientiCe/pvpgn-chat/releases). Unpack it and run `pvpgn-chat`.
+Each archive has a `.sha256` file next to it.
+
+## Build from source
 
 You need a recent stable [Rust toolchain](https://rustup.rs/).
 
 ```sh
 git clone https://github.com/AncientiCe/pvpgn-chat.git
 cd pvpgn-chat
-cargo run -p bnetchat-gpui --release
+cargo run --release
 ```
 
 The first build takes a few minutes (GPUI is a large dependency); later builds are quick.
+On Linux, install the GUI libraries first:
 
-**Logging in:**
+```sh
+sudo apt-get install pkg-config libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev   libxcb1-dev libx11-xcb-dev libfontconfig1-dev libfreetype6-dev
+```
+
+## Logging in
+
 1. Pick **Eurobattle.net** (or *Other…* and type `host:port`).
 2. Enter your username and password, and press Enter.
 3. Next time, your account is in the dropdown: just press Enter.
@@ -51,25 +68,6 @@ The first build takes a few minutes (GPUI is a large dependency); later builds a
 The client uses PvPGN's chat gateway (the "BOT or Telnet" connection), not the game protocol.
 Servers only allow that for accounts with `BNET\auth\botlogin` set to `true`. If you see
 *"This account has no chat-gateway (bot) access"*, ask a server admin to enable it.
-
-## Two front ends
-
-The repository has two apps on the same core:
-
-| App | Run | Notes |
-|---|---|---|
-| GPUI client (`gpui-app/`) | `cargo run -p bnetchat-gpui` | The modern client shown above. Recommended. |
-| egui client (`src/main.rs`) | `cargo run` | The original client. Release binaries are built from it. |
-
-Protocol, connection, chat state and saved accounts live in the `bnetchat` library
-(`src/lib.rs`), so both apps behave the same.
-
-<details>
-<summary>egui client screenshot</summary>
-
-![egui client demo](demo.gif)
-
-</details>
 
 ## Troubleshooting
 
@@ -83,37 +81,51 @@ To see raw server traffic, run with debug logging (passwords are never logged):
 
 ```sh
 # PowerShell
-$env:RUST_LOG = "warn,bnetchat=debug"; cargo run -p bnetchat-gpui
+$env:RUST_LOG = "warn,bnetchat=debug"; cargo run
 # bash / zsh
-RUST_LOG=warn,bnetchat=debug cargo run -p bnetchat-gpui
+RUST_LOG=warn,bnetchat=debug cargo run
 ```
 
 ## Project layout
 
 ```text
-src/
-  lib.rs         bnetchat library: everything UI-independent
+src/             bnetchat library: everything UI-independent
+  lib.rs
   protocol.rs    PvPGN chat-gateway lines -> typed events
   connect.rs     TCP connection and login handshake
   session.rs     logged-in session, background reader, /quit on close
   chat.rs        chat state: messages, users, channel, whisper replies
   accounts.rs    saved accounts + OS credential store
-  main.rs ...    egui client (chat_view.rs, login.rs, theme.rs)
-gpui-app/        GPUI client (login_view.rs, chat_view.rs)
+gpui-app/        the pvpgn-chat desktop app (GPUI): main.rs, login_view.rs, chat_view.rs
 tests/           end-to-end test against a fake chat gateway
 ```
 
 ## Development
 
 ```sh
-cargo test                       # unit tests + end-to-end session test
-cargo clippy --all-targets       # lints for the library and egui app
-cargo build -p bnetchat-gpui     # GPUI client
+cargo fmt --all
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace           # unit tests + end-to-end session test
+cargo audit                      # dependency advisories
 ```
 
-Release binaries for Windows, macOS and Linux are built by GitHub Actions when a `v*` tag is
-pushed (`.github/workflows/release.yml`).
+CI runs the same checks on every push (`ci.yml`, `audit.yml`), on Linux plus a build and test
+on Windows and macOS.
+
+### Releasing
+
+1. Move the `[Unreleased]` notes in [CHANGELOG.md](CHANGELOG.md) into a `## [X.Y.Z] - date`
+   section and set `version = "X.Y.Z"` in `Cargo.toml` and `gpui-app/Cargo.toml`.
+2. Commit, push, and wait for CI and Audit to pass on that commit.
+3. Tag it `vX.Y.Z` and push the tag.
+
+`release.yml` then checks the tag matches the app version, builds Windows, macOS and Linux
+archives, and publishes the GitHub release with that version's CHANGELOG section as its notes.
 
 ## Community
 
 Questions and ideas: [W3 Developers Discord](https://discord.gg/jq6rPHc95D).
+
+## License
+
+[MIT](LICENSE)

@@ -1,52 +1,139 @@
-name: Build and Release Binaries
+# Release: when a version tag (vX.Y.Z) is pushed, build pvpgn-chat for Windows,
+# macOS and Linux and publish a GitHub release whose notes are that version's
+# CHANGELOG.md section, copied verbatim. Nothing is generated.
+#
+# Push the tag only after CI and Audit have passed on the release commit.
+name: Release
 
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
 
 permissions:
-  contents: write  # Required to publish a release
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
 
 jobs:
-  build:
-    name: Build on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        include:
-          - os: ubuntu-latest
-            ext: ""
-          - os: windows-latest
-            ext: ".exe"
-          - os: macos-latest
-            ext: ""
-
+  notes:
+    name: Check version and CHANGELOG
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Rust
-        uses: actions-rs/toolchain@v1
+      - name: Tag matches the app version
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          app_version=$(grep -m1 '^version' gpui-app/Cargo.toml | cut -d'"' -f2)
+          if [ "$version" != "$app_version" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match gpui-app/Cargo.toml version $app_version."
+            exit 1
+          fi
+
+      - name: Extract this version's CHANGELOG section
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v v="$version" 'index($0, "## [" v "]") == 1 {f=1; next} /^## \[/ {f=0} f' \
+            CHANGELOG.md > release-notes.md
+          if ! grep -q '[^[:space:]]' release-notes.md; then
+            echo "::error::CHANGELOG.md has no '## [$version]' section; add it before tagging."
+            exit 1
+          fi
+
+      - name: Keep the notes for the release job
+        uses: actions/upload-artifact@v4
         with:
-          toolchain: stable
-          override: true
+          name: release-notes
+          path: release-notes.md
 
-      - name: Install Linux dependencies
-        if: matrix.os == 'ubuntu-latest'
-        run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev
+  build:
+    name: Build (${{ matrix.target }})
+    needs: notes
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+          - os: macos-latest
+            target: aarch64-apple-darwin
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Build binary
-        run: cargo build --release
+      - name: Install Linux GUI libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libxkbcommon-dev libxkbcommon-x11-dev \
+            libwayland-dev libxcb1-dev libx11-xcb-dev libfontconfig1-dev libfreetype6-dev
 
-      - name: Rename output binary
-        run: mv target/release/bnetchat${{ matrix.ext }} target/release/bnetchat-${{ matrix.os }}${{ matrix.ext }}
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Build
+        run: cargo build --release --locked -p pvpgn-chat --target ${{ matrix.target }}
+
+      - name: Package
         shell: bash
+        run: |
+          name="pvpgn-chat-${GITHUB_REF_NAME}-${{ matrix.target }}"
+          mkdir -p "dist/$name"
+          bin="target/${{ matrix.target }}/release/pvpgn-chat"
+          if [ "$RUNNER_OS" = "Windows" ]; then bin="$bin.exe"; fi
+          cp "$bin" README.md LICENSE CHANGELOG.md "dist/$name/"
+          cd dist
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            7z a -tzip "$name.zip" "$name" > /dev/null
+            sha256sum "$name.zip" > "$name.zip.sha256"
+          else
+            tar -czf "$name.tar.gz" "$name"
+            shasum -a 256 "$name.tar.gz" > "$name.tar.gz.sha256"
+          fi
+          rm -rf "$name"
 
-      - name: Upload release asset
-        uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Upload build
+        uses: actions/upload-artifact@v4
         with:
-          files: target/release/bnetchat-${{ matrix.os }}${{ matrix.ext }}
+          name: build-${{ matrix.target }}
+          path: dist/*
+
+  release:
+    name: Publish GitHub release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download notes and builds
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Publish release
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          notes=artifacts/release-notes/release-notes.md
+          files=$(find artifacts -path 'artifacts/build-*' -type f | sort)
+          if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
+            gh release edit "$GITHUB_REF_NAME" --notes-file "$notes"
+            gh release upload "$GITHUB_REF_NAME" $files --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" \
+              --notes-file "$notes" $files
+          fi
