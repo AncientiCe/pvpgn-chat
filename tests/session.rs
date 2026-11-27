@@ -42,7 +42,8 @@ fn fake_server(lines: &'static str) -> (String, thread::JoinHandle<Vec<String>>)
         thread::sleep(Duration::from_millis(100));
         sock.write_all(b.as_bytes()).unwrap();
 
-        let sent = vec![read_line()];
+        // Chat line, then the logout sent by Session::close.
+        let sent = vec![read_line(), read_line()];
         drop(sock);
         sent
     });
@@ -62,6 +63,8 @@ fn logs_in_streams_events_and_reports_disconnect() {
     })
     .expect("login");
     session.send("hi all").unwrap();
+    thread::sleep(Duration::from_millis(300));
+    session.close();
 
     let mut chat = ChatState::new(session.username());
     let mut events = Vec::new();
@@ -74,7 +77,7 @@ fn logs_in_streams_events_and_reports_disconnect() {
         }
     }
 
-    assert_eq!(server.join().unwrap(), vec!["hi all".to_string()]);
+    assert_eq!(server.join().unwrap(), vec!["hi all".to_string(), "/quit".to_string()]);
     assert_eq!(events.first(), Some(&ServerEvent::Channel { name: "W3".into() }));
     assert!(events.contains(&ServerEvent::Talk { from: "Bob".into(), text: "hello tester".into() }));
     assert!(matches!(events.last(), Some(ServerEvent::Disconnected { .. })));

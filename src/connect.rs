@@ -30,7 +30,7 @@ fn login_refusal(collected: &str) -> Option<&'static str> {
     if collected.contains("Account has no bot access.") {
         Some(r"This account has no chat-gateway (bot) access. A server admin must set BNET\auth\botlogin to true for it.")
     } else if collected.contains("Login failed.") {
-        Some("Login failed: wrong username or password.")
+        Some("Login failed: wrong username or password, or this account is still logged in elsewhere.")
     } else {
         None
     }

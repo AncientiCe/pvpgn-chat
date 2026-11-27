@@ -46,6 +46,11 @@ impl ChatView {
             }
         });
         input.update(cx, |input, cx| input.focus(window, cx));
+        // Log out cleanly when the app quits, so the server frees the account.
+        let quit = cx.on_app_quit(|this, _cx| {
+            this.session.close();
+            async {}
+        });
 
         Self {
             session,
@@ -56,7 +61,7 @@ impl ChatView {
             seen_dropped: 0,
             quoted: None,
             show_members: true,
-            _subscriptions: vec![sub],
+            _subscriptions: vec![sub, quit],
         }
     }
 

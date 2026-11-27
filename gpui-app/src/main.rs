@@ -164,6 +164,13 @@ fn main() {
             };
             gpui_kit::open_window(options, cx, |window, cx| cx.new(|cx| BnetApp::new(window, cx)))
                 .expect("failed to open window");
+            // Closing the window quits the app (which logs out, see ChatView).
+            cx.on_window_closed(|cx, _| {
+                if cx.windows().is_empty() {
+                    cx.quit();
+                }
+            })
+            .detach();
             cx.activate(true);
         });
 }

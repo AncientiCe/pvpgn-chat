@@ -44,6 +44,7 @@ impl Credentials {
 pub struct Session {
     conn: Connect,
     username: String,
+    closed: bool,
 }
 
 /// Resolve `host:port`, accepting both IPs and host names.
@@ -89,7 +90,7 @@ impl Session {
             .map_err(|e| format!("Failed to start reader: {e}"))?;
 
         info!("Session established for {}", cred.user);
-        Ok(Session { conn, username: cred.user.clone() })
+        Ok(Session { conn, username: cred.user.clone(), closed: false })
     }
 
     pub fn username(&self) -> &str {
@@ -102,11 +103,25 @@ impl Session {
         self.conn.send(line).map_err(|e| format!("Send failed: {e}"))
     }
 
-    /// Close the socket; the reader thread then ends with `Disconnected`.
+    /// Log out with `/quit`, then close the socket; the reader thread then
+    /// ends with `Disconnected`. Without the `/quit` the server can keep the
+    /// account logged in for a while and refuse the next login. Safe to call
+    /// more than once; also runs on drop.
     pub fn close(&mut self) {
+        if std::mem::replace(&mut self.closed, true) {
+            return;
+        }
+        info!("Logging out {}", self.username);
+        let _ = self.conn.send("/quit");
         if let Err(e) = self.conn.close() {
             warn!("Error closing connection: {e}");
         }
+    }
+}
+
+impl Drop for Session {
+    fn drop(&mut self) {
+        self.close();
     }
 }
 
