@@ -16,7 +16,13 @@ use crate::chat_view::ChatView;
 use crate::theme::{AppTheme, MessageStyle};
 
 fn main() {
-    tracing_subscriber::fmt().with_max_level(tracing::Level::WARN).init();
+    // Override with RUST_LOG, e.g. `RUST_LOG=bnetchat=debug` to see raw traffic.
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "warn,bnetchat=info,bnetchat_gpui=info".into()),
+        )
+        .init();
 
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()

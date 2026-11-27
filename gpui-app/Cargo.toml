@@ -9,6 +9,6 @@ description = "Prototype GPUI front end for bnetchat"
 bnetchat = { path = ".." }
 gpui-kit = "=0.11.0"
 smol = "2"
-tracing = "0.1"
+log = "0.4"
 serde_json = "1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }

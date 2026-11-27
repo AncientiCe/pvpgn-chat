@@ -183,6 +183,8 @@ impl ChatState {
                 self.channel = Some(channel);
                 self.topic = Some(topic);
             }
+            // Servers send blank INFO lines as spacers in their welcome text.
+            ServerEvent::Info { text } if text.trim().is_empty() => {}
             ServerEvent::Info { text } => self.push(MessageKind::Info, None, text),
             ServerEvent::Error { text } => self.push(MessageKind::Error, None, text),
             ServerEvent::Null => {}

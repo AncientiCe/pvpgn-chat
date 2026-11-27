@@ -25,6 +25,17 @@ fn split_partial(collected: &str, wait_s: &str) -> (String, String) {
     }
 }
 
+/// The server's reasons for refusing a login (see PvPGN `handle_bot.cpp`).
+fn login_refusal(collected: &str) -> Option<&'static str> {
+    if collected.contains("Account has no bot access.") {
+        Some(r"This account has no chat-gateway (bot) access. A server admin must set BNET\auth\botlogin to true for it.")
+    } else if collected.contains("Login failed.") {
+        Some("Login failed: wrong username or password.")
+    } else {
+        None
+    }
+}
+
 impl Connect {
     pub fn new(stream: TcpStream) -> Connect {
         let _ = stream.set_nodelay(true);
@@ -120,7 +131,7 @@ impl Connect {
         // Set stream to non-blocking mode
         self.stream.set_nonblocking(true).map_err(|e| format!("Failed to set non-blocking: {}", e))?;
 
-        while !collected.contains(&expected_success) && !collected.contains("Login failed.") {
+        while !collected.contains(&expected_success) && login_refusal(&collected).is_none() {
             // Check for timeout
             if start_time.elapsed() > timeout {
                 self.stream.set_nonblocking(false).ok(); // Reset to blocking
@@ -156,10 +167,9 @@ impl Connect {
             }
         }
 
-        // Check if login failed
-        if collected.contains("Login failed.") {
+        if let Some(reason) = login_refusal(&collected) {
             self.stream.set_nonblocking(false).ok(); // Reset to blocking
-            return Err("Login failed.".to_string());
+            return Err(reason.to_string());
         }
 
         // Parse the collected data and extract any extra messages beyond the login success

@@ -7,7 +7,7 @@ use std::thread;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 use crate::connect::Connect;
 use crate::protocol::{parse_line, ServerEvent};
@@ -58,6 +58,7 @@ impl Session {
 
         // Lines that arrived during login go first, so order is preserved.
         for line in backlog.iter().filter(|l| !l.is_empty()) {
+            debug!("<< {line}");
             on_event(parse_line(line));
         }
 
@@ -76,6 +77,7 @@ impl Session {
 
     /// Send one line (chat text or a `/command`).
     pub fn send(&mut self, line: &str) -> Result<(), String> {
+        debug!(">> {line}");
         self.conn.send(line).map_err(|e| format!("Send failed: {e}"))
     }
 
@@ -99,11 +101,13 @@ fn read_loop<R: Read, F: Fn(ServerEvent)>(stream: R, on_event: F) {
                 let line = String::from_utf8_lossy(&buf);
                 let line = line.trim_end_matches(['\r', '\n']);
                 if !line.is_empty() {
+                    debug!("<< {line}");
                     on_event(parse_line(line));
                 }
             }
             Err(e) => break format!("Read error: {e}"),
         }
     };
+    info!("Reader stopped: {reason}");
     on_event(ServerEvent::Disconnected { reason });
 }

@@ -49,6 +49,7 @@ impl BnetApp {
     fn connect(&mut self, cred: Credentials, window: &mut Window, cx: &mut Context<Self>) {
         self.screen = Screen::Connecting;
         cx.notify();
+        log::info!("Connecting to {} as {}", cred.server, cred.user);
 
         if let Ok(json) = serde_json::to_string_pretty(&cred) {
             let _ = std::fs::write("credentials.json", json);
@@ -77,6 +78,7 @@ impl BnetApp {
                     Some(chat)
                 }
                 Err(err) => {
+                    log::warn!("Login failed: {err}");
                     this.show_login(Some(err), window, cx);
                     None
                 }
@@ -138,7 +140,13 @@ pub fn set_dark(dark: bool, window: &mut Window, cx: &mut App) {
 }
 
 fn main() {
-    tracing_subscriber::fmt().with_max_level(tracing::Level::WARN).init();
+    // Override with RUST_LOG, e.g. `RUST_LOG=bnetchat=debug` to see raw traffic.
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "warn,bnetchat=info,bnetchat_gpui=info".into()),
+        )
+        .init();
 
     gpui_kit::application()
         .with_assets(gpui_kit::assets::Assets)

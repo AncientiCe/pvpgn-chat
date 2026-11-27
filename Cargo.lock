@@ -859,9 +859,9 @@ version = "0.1.0"
 dependencies = [
  "bnetchat",
  "gpui-kit",
+ "log",
  "serde_json",
  "smol",
- "tracing",
  "tracing-subscriber",
 ]
 
